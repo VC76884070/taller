@@ -182,6 +182,570 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+// =====================================================
+// GENERADOR DE PDF DE RECEPCIÓN EN FRONTEND
+// Usando html2pdf.js + jsPDF
+// =====================================================
+
+// Cargar html2pdf.js dinámicamente si no está
+async function cargarHtml2Pdf() {
+    if (typeof html2pdf !== 'undefined') return;
+    
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+        script.onload = resolve;
+        script.onerror = () => reject(new Error('No se pudo cargar html2pdf.js'));
+        document.head.appendChild(script);
+    });
+}
+
+// =====================================================
+// FUNCIÓN PRINCIPAL: GENERAR Y SUBIR PDF
+// =====================================================
+async function generarYSubirPDFRecepcion(idOrden) {
+    try {
+        mostrarLoading('Generando PDF...');
+        
+        // 1. Cargar librería
+        await cargarHtml2Pdf();
+        
+        // 2. Obtener detalle de la recepción (ya incluye fotos opcionales)
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/jefe-operativo/detalle-recepcion/${idOrden}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Error obteniendo detalle de la recepción');
+        }
+        
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Error en la respuesta');
+        }
+        
+        const detalle = data.detalle;
+        
+        // 3. Convertir imágenes a base64 (para evitar problemas de CORS)
+        mostrarLoading('Procesando imágenes...');
+        const detalleConImagenes = await convertirImagenesABase64(detalle);
+        
+        // 4. Construir HTML del PDF
+        const html = construirHTMLRecepcion(detalleConImagenes);
+        
+        // 5. Crear contenedor temporal fuera de pantalla
+        const contenedor = document.createElement('div');
+        contenedor.innerHTML = html;
+        contenedor.style.position = 'fixed';
+        contenedor.style.left = '-9999px';
+        contenedor.style.top = '0';
+        contenedor.style.width = '210mm'; // A4 ancho
+        contenedor.style.background = 'white';
+        contenedor.style.padding = '0';
+        document.body.appendChild(contenedor);
+        
+        // 6. Esperar a que todas las imágenes carguen
+        await esperarImagenes(contenedor);
+        
+        // 7. Generar PDF como blob
+        mostrarLoading('Generando PDF...');
+        const opt = {
+            margin: [8, 8, 8, 8], // mm
+            filename: `Recepcion_${detalle.codigo_unico}.pdf`,
+            image: { type: 'jpeg', quality: 0.95 },
+            html2canvas: {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                logging: false,
+                windowWidth: 800, // ancho de render consistente
+            },
+            jsPDF: {
+                unit: 'mm',
+                format: 'a4',
+                orientation: 'portrait',
+                compress: true
+            },
+            pagebreak: {
+                mode: ['avoid-all', 'css', 'legacy'],
+                before: '.page-break-before',
+                after: '.page-break-after',
+                avoid: '.avoid-break'
+            }
+        };
+        
+        const pdfBlob = await html2pdf()
+            .set(opt)
+            .from(contenedor)
+            .outputPdf('blob');
+        
+        // 8. Limpiar contenedor
+        document.body.removeChild(contenedor);
+        
+        // 9. Convertir blob a base64
+        const pdfBase64 = await blobToBase64(pdfBlob);
+        
+        // 10. Subir a Drive
+        mostrarLoading('Subiendo a Drive...');
+        const uploadResponse = await fetch('/api/jefe-operativo/subir-pdf-recepcion', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                pdf_base64: pdfBase64,
+                id_orden: idOrden,
+                codigo_unico: detalle.codigo_unico
+            })
+        });
+        
+        const uploadData = await uploadResponse.json();
+        
+        if (!uploadData.success) {
+            throw new Error(uploadData.error || 'Error subiendo PDF');
+        }
+        
+        ocultarLoading();
+        mostrarNotificacion('✅ PDF generado y guardado correctamente', 'success');
+        
+        // 11. Abrir el PDF en nueva pestaña (opcional)
+        if (uploadData.url) {
+            window.open(uploadData.url, '_blank');
+        }
+        
+        return uploadData;
+        
+    } catch (error) {
+        ocultarLoading();
+        console.error('❌ Error generando PDF:', error);
+        mostrarNotificacion(`Error: ${error.message}`, 'error');
+        throw error;
+    }
+}
+
+// =====================================================
+// CONVERTIR IMÁGENES A BASE64 (evita CORS)
+// =====================================================
+async function convertirImagenesABase64(detalle) {
+    const detalleCopia = JSON.parse(JSON.stringify(detalle));
+    const fotos = detalleCopia.fotos || {};
+    
+    const token = localStorage.getItem('token');
+    const conversiones = [];
+    
+    for (const [campo, url] of Object.entries(fotos)) {
+        if (url && url !== 'null' && url !== 'None' && url !== '' && url !== 'undefined') {
+            conversiones.push(
+                (async () => {
+                    try {
+                        const resp = await fetch(
+                            `/api/jefe-operativo/proxy-imagen?url=${encodeURIComponent(url)}`,
+                            { headers: { 'Authorization': `Bearer ${token}` } }
+                        );
+                        const data = await resp.json();
+                        if (data.success && data.base64) {
+                            detalleCopia.fotos[campo] = data.base64;
+                        }
+                    } catch (e) {
+                        console.warn(`⚠️ No se pudo convertir ${campo}:`, e);
+                    }
+                })()
+            );
+        }
+    }
+    
+    await Promise.all(conversiones);
+    return detalleCopia;
+}
+
+// =====================================================
+// CONSTRUIR HTML DEL PDF
+// =====================================================
+function construirHTMLRecepcion(detalle) {
+    const FOTOS_OBLIGATORIAS = [
+        ['url_lateral_izquierda', 'Lateral Izquierdo'],
+        ['url_lateral_derecha', 'Lateral Derecho'],
+        ['url_foto_frontal', 'Frontal'],
+        ['url_foto_trasera', 'Trasera'],
+        ['url_foto_superior', 'Superior'],
+        ['url_foto_inferior', 'Inferior'],
+        ['url_foto_tablero', 'Tablero']
+    ];
+    
+    // --- Fotos obligatorias ---
+    let fotosObligatoriasHTML = '';
+    FOTOS_OBLIGATORIAS.forEach(([campo, label]) => {
+        const url = detalle.fotos?.[campo];
+        if (url && url !== 'null' && url !== 'None' && url !== '') {
+            fotosObligatoriasHTML += `
+                <div class="foto-item">
+                    <img src="${url}" alt="${label}">
+                    <div class="foto-label">${label}</div>
+                </div>`;
+        }
+    });
+    
+    // --- Fotos opcionales ---
+    let fotosOpcionalesHTML = '';
+    let contadorOpcionales = 0;
+    for (let i = 1; i <= 10; i++) {
+        const campo = `opcional${i}`;
+        const url = detalle.fotos?.[campo] || detalle.fotos?.[`url_${campo}`];
+        if (url && url !== 'null' && url !== 'None' && url !== '') {
+            contadorOpcionales++;
+            const comentario = detalle.comentarios?.[campo] || detalle.comentarios?.[`url_${campo}`] || '';
+            fotosOpcionalesHTML += `
+                <div class="foto-item">
+                    <img src="${url}" alt="Adicional ${i}">
+                    <div class="foto-label"><b>Adicional ${i}</b></div>
+                    ${comentario ? `<div class="foto-comentario">${escapeHtml(comentario)}</div>` : ''}
+                </div>`;
+        }
+    }
+    
+    // --- Audio ---
+    const audioHTML = detalle.audio_url ? `
+        <div class="audio-info">
+            <span class="audio-icon">🎵</span>
+            <span>Audio disponible en Google Drive</span>
+        </div>` : '';
+    
+    return `
+        <style>
+            .pdf-container {
+                font-family: 'Arial', 'Helvetica', sans-serif;
+                color: #333;
+                font-size: 11px;
+                line-height: 1.4;
+                padding: 15px;
+                background: white;
+                width: 100%;
+                box-sizing: border-box;
+            }
+            .pdf-header {
+                text-align: center;
+                border-bottom: 3px solid #C1121F;
+                padding-bottom: 10px;
+                margin-bottom: 15px;
+            }
+            .pdf-header h1 {
+                color: #C1121F;
+                margin: 0;
+                font-size: 22px;
+                font-weight: bold;
+            }
+            .pdf-header h2 {
+                color: #C1121F;
+                margin: 5px 0;
+                font-size: 13px;
+                font-weight: normal;
+            }
+            .pdf-codigo {
+                font-size: 18px;
+                font-weight: bold;
+                color: #C1121F;
+                margin-top: 8px;
+            }
+            .pdf-section-title {
+                color: #C1121F;
+                font-size: 12px;
+                font-weight: bold;
+                border-bottom: 1px solid #C1121F;
+                padding-bottom: 3px;
+                margin: 14px 0 8px 0;
+                text-transform: uppercase;
+            }
+            .pdf-table {
+                width: 100%;
+                border-collapse: collapse;
+                background: #f8f8f8;
+                margin-bottom: 10px;
+            }
+            .pdf-table td {
+                padding: 5px 8px;
+                border: 1px solid #e0e0e0;
+                font-size: 10px;
+                vertical-align: top;
+            }
+            .pdf-table td b {
+                color: #555;
+            }
+            .fotos-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 8px;
+                margin-bottom: 10px;
+            }
+            .foto-item {
+                text-align: center;
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            .foto-item img {
+                width: 100%;
+                height: 110px;
+                object-fit: cover;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                display: block;
+            }
+            .foto-label {
+                font-size: 9px;
+                color: #666;
+                margin-top: 3px;
+            }
+            .foto-comentario {
+                font-size: 8px;
+                color: #888;
+                font-style: italic;
+                margin-top: 2px;
+                line-height: 1.2;
+            }
+            .descripcion-box {
+                background: #f8f8f8;
+                padding: 10px;
+                border-radius: 4px;
+                font-size: 10px;
+                min-height: 50px;
+                border-left: 3px solid #C1121F;
+            }
+            .audio-info {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 8px;
+                background: #f0f7ff;
+                border-radius: 4px;
+                font-size: 10px;
+                color: #0066cc;
+            }
+            .firmas-table {
+                width: 100%;
+                margin-top: 40px;
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            .firmas-table td {
+                text-align: center;
+                width: 50%;
+                padding: 0 20px;
+            }
+            .firma-linea {
+                border-top: 1px solid #333;
+                margin-top: 50px;
+                padding-top: 5px;
+                font-size: 10px;
+            }
+            .firma-nombre {
+                font-size: 9px;
+                color: #666;
+                margin-top: 2px;
+            }
+            .pdf-footer {
+                text-align: center;
+                font-size: 8px;
+                color: #999;
+                margin-top: 20px;
+                border-top: 1px solid #eee;
+                padding-top: 8px;
+            }
+            .page-break {
+                page-break-before: always;
+                break-before: page;
+            }
+        </style>
+        
+        <div class="pdf-container">
+            <!-- HEADER -->
+            <div class="pdf-header">
+                <h1>FURIA MOTOR COMPANY</h1>
+                <h2>ORDEN DE TRABAJO - RECEPCIÓN</h2>
+                <div class="pdf-codigo">Código: ${detalle.codigo_unico || 'N/A'}</div>
+            </div>
+            
+            <!-- INFO GENERAL -->
+            <div class="pdf-section-title">Información General</div>
+            <table class="pdf-table">
+                <tr>
+                    <td><b>Fecha Ingreso:</b> ${formatearFecha(detalle.fecha_ingreso)}</td>
+                    <td><b>Estado:</b> ${detalle.estado_global || 'N/A'}</td>
+                </tr>
+                <tr>
+                    <td><b>ID Orden:</b> #${detalle.id || 'N/A'}</td>
+                    <td><b>Jefe Operativo:</b> ${detalle.jefe_operativo?.nombre || 'N/A'}</td>
+                </tr>
+            </table>
+            
+            <!-- CLIENTE -->
+            <div class="pdf-section-title">Datos del Cliente</div>
+            <table class="pdf-table">
+                <tr>
+                    <td><b>Nombre:</b> ${detalle.cliente_nombre || 'N/A'}</td>
+                    <td><b>Teléfono:</b> ${detalle.cliente_telefono || 'N/A'}</td>
+                </tr>
+                <tr>
+                    <td colspan="2"><b>Ubicación:</b> ${detalle.cliente_ubicacion || 'No especificada'}</td>
+                </tr>
+            </table>
+            
+            <!-- VEHÍCULO -->
+            <div class="pdf-section-title">Datos del Vehículo</div>
+            <table class="pdf-table">
+                <tr>
+                    <td><b>Placa:</b> ${detalle.placa || 'N/A'}</td>
+                    <td><b>Marca:</b> ${detalle.marca || 'N/A'}</td>
+                </tr>
+                <tr>
+                    <td><b>Modelo:</b> ${detalle.modelo || 'N/A'}</td>
+                    <td><b>Año:</b> ${detalle.anio || 'N/A'}</td>
+                </tr>
+                <tr>
+                    <td colspan="2"><b>Kilometraje:</b> ${detalle.kilometraje || 0} km</td>
+                </tr>
+            </table>
+            
+            <!-- FOTOS OBLIGATORIAS -->
+            <div class="pdf-section-title">Fotos Obligatorias</div>
+            <div class="fotos-grid">
+                ${fotosObligatoriasHTML || '<p style="font-size:10px;color:#888;">No se registraron fotos obligatorias</p>'}
+            </div>
+            
+            <!-- FOTOS OPCIONALES -->
+            ${contadorOpcionales > 0 ? `
+                <div class="pdf-section-title">Fotos de Detalle (Opcionales)</div>
+                <div class="fotos-grid">
+                    ${fotosOpcionalesHTML}
+                </div>
+            ` : ''}
+            
+            <!-- DESCRIPCIÓN -->
+            <div class="pdf-section-title">Descripción del Problema</div>
+            <div class="descripcion-box">
+                ${escapeHtml(detalle.transcripcion_problema || 'No se registró descripción')}
+            </div>
+            
+            ${audioHTML}
+            
+            <!-- FIRMAS -->
+            <div class="pdf-section-title">Firmas de Conformidad</div>
+            <table class="firmas-table">
+                <tr>
+                    <td>
+                        <div class="firma-linea">
+                            <b>Firma del Cliente</b>
+                            <div class="firma-nombre">${detalle.cliente_nombre || ''}</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="firma-linea">
+                            <b>Firma del Jefe Operativo</b>
+                            <div class="firma-nombre">${detalle.jefe_operativo?.nombre || ''}</div>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+            
+            <!-- FOOTER -->
+            <div class="pdf-footer">
+                Documento generado automáticamente por FURIA MOTOR COMPANY - ${new Date().toLocaleString('es-ES')}
+            </div>
+        </div>
+    `;
+}
+
+// =====================================================
+// HELPERS
+// =====================================================
+
+function esperarImagenes(contenedor) {
+    const imgs = contenedor.querySelectorAll('img');
+    return Promise.all(Array.from(imgs).map(img => {
+        if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+        return new Promise(resolve => {
+            img.onload = resolve;
+            img.onerror = resolve;
+            // Timeout por si alguna imagen se cuelga
+            setTimeout(resolve, 5000);
+        });
+    }));
+}
+
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+function formatearFecha(fecha) {
+    if (!fecha) return 'N/A';
+    try {
+        return new Date(fecha).toLocaleString('es-ES', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+    } catch {
+        return fecha;
+    }
+}
+
+function escapeHtml(texto) {
+    if (!texto) return '';
+    const div = document.createElement('div');
+    div.textContent = texto;
+    return div.innerHTML;
+}
+
+function mostrarLoading(mensaje) {
+    // Implementa según tu sistema (o usa un spinner existente)
+    const el = document.getElementById('loading-pdf') || crearLoading();
+    el.querySelector('.loading-text').textContent = mensaje;
+    el.style.display = 'flex';
+}
+
+function ocultarLoading() {
+    const el = document.getElementById('loading-pdf');
+    if (el) el.style.display = 'none';
+}
+
+function crearLoading() {
+    const div = document.createElement('div');
+    div.id = 'loading-pdf';
+    div.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    div.innerHTML = `
+        <div style="background:white;padding:30px 40px;border-radius:12px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+            <div style="border:4px solid #f3f3f3;border-top:4px solid #C1121F;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 15px;"></div>
+            <div class="loading-text" style="color:#333;font-weight:bold;">Cargando...</div>
+        </div>
+        <style>@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style>
+    `;
+    document.body.appendChild(div);
+    return div;
+}
+function setupBotonGenerarPDF() {
+    const btn = document.getElementById('btn-generar-pdf');
+    if (!btn) {
+        console.log('ℹ️ No existe botón btn-generar-pdf (esto es normal si usas otro flujo)');
+        return;
+    }
+    btn.addEventListener('click', async () => {
+        const idOrden = datosReporteFinal?.id || recepcionEditandoId;
+        if (!idOrden) {
+            mostrarNotificacion('⚠️ No hay orden seleccionada', 'warning');
+            return;
+        }
+        try {
+            await generarYSubirPDFRecepcion(idOrden);
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    });
+}
 
 function mostrarNotificacion(mensaje, tipo = 'info') {
     const existingToasts = document.querySelectorAll('.toast-notification');
@@ -3772,787 +4336,480 @@ async function descargarPDFFinal() {
 
     if (btnDescargar) {
         btnDescargar.disabled = true;
-        btnDescargar.innerHTML =
-            '<i class="fas fa-spinner fa-spin"></i> Generando...';
+        btnDescargar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
     }
 
-    showProgress(
-        'Generando PDF',
-        'Preparando el documento...'
-    );
-
+    showProgress('Generando PDF', 'Preparando el documento...');
     updateProgressBar(10);
 
     let container = null;
 
     try {
-
         // ============================================================
         // 1. PREPARAR DATOS
         // ============================================================
+        const detalleParaPDF = JSON.parse(JSON.stringify(datosReporteFinal));
+        const fotos = datosReporteFinal.fotos || {};
 
-        const detalleParaPDF =
-            JSON.parse(JSON.stringify(datosReporteFinal));
-
-        const fotos =
-            datosReporteFinal.fotos || {};
-
-        const camposFotos = [
-            'url_lateral_izquierda',
-            'url_lateral_derecha',
-            'url_foto_frontal',
-            'url_foto_trasera',
-            'url_foto_superior',
-            'url_foto_inferior',
-            'url_foto_tablero'
-        ];
-
-        updateProgressMessage(
-            'Convirtiendo fotos...'
-        );
-
+        updateProgressMessage('Convirtiendo fotos...');
 
         // ============================================================
-        // 2. CONVERTIR FOTOS
+        // 2. CONVERTIR **TODAS** LAS FOTOS A BASE64
+        //    (OBLIGATORIAS + OPCIONALES) - ESTO ES CLAVE
         // ============================================================
+        // Recopilar TODAS las claves de fotos que tengan URL válida
+        const todasLasClaves = Object.keys(fotos).filter(key => {
+            const url = fotos[key];
+            return url &&
+                   url !== 'null' &&
+                   url !== 'None' &&
+                   url !== '' &&
+                   url !== 'undefined' &&
+                   !url.startsWith('data:image');
+        });
 
-        const fotosNecesitanConversion =
-            camposFotos.filter(c => {
+        console.log(`📸 Fotos a convertir a base64: ${todasLasClaves.length}`);
+        console.log(`📸 Claves: ${todasLasClaves.join(', ')}`);
 
-                const url = fotos[c];
+        const fotosBase64 = {};
 
-                return (
-                    url &&
-                    url !== 'null' &&
-                    url !== 'None' &&
-                    url !== '' &&
-                    url !== null &&
-                    url !== 'undefined' &&
-                    !url.startsWith('data:image')
-                );
-            });
-
-
-        for (const campo of fotosNecesitanConversion) {
-
+        // Convertir en lotes para no saturar
+        for (const campo of todasLasClaves) {
             const url = fotos[campo];
-
             try {
-
-                const base64 =
-                    await convertirImagenABase64(url);
-
-                if (
-                    base64 &&
-                    base64.startsWith('data:image')
-                ) {
-                    detalleParaPDF.fotos[campo] =
-                        base64;
+                const base64 = await convertirImagenABase64(url);
+                if (base64 && base64.startsWith('data:image')) {
+                    fotosBase64[campo] = base64;
+                    console.log(`✅ ${campo} convertida`);
+                } else {
+                    // Si falla la conversión, dejamos la URL original (por si acaso)
+                    fotosBase64[campo] = url;
+                    console.warn(`⚠️ ${campo} no se pudo convertir, se usa URL original`);
                 }
-
             } catch (error) {
-
-                console.warn(
-                    `Error convirtiendo ${campo}:`,
-                    error
-                );
+                console.warn(`⚠️ Error convirtiendo ${campo}:`, error);
+                fotosBase64[campo] = url;
             }
         }
 
+        // Reemplazar TODAS las fotos con sus versiones base64
+        detalleParaPDF.fotos = { ...fotos, ...fotosBase64 };
+        detalleParaPDF.fotos_base64 = detalleParaPDF.fotos;
 
-        detalleParaPDF.fotos_base64 =
-            detalleParaPDF.fotos;
+        console.log(`📸 Fotos convertidas: ${Object.keys(fotosBase64).length}`);
+        console.log(`📸 Total fotos en detalleParaPDF: ${Object.keys(detalleParaPDF.fotos).length}`);
 
         updateProgressBar(40);
-
 
         // ============================================================
         // 3. GENERAR HTML
         // ============================================================
-
-        updateProgressMessage(
-            'Generando contenido del reporte...'
-        );
-
-        const reporteHTML =
-            generarHTMLReporte(
-                detalleParaPDF
-            );
-
+        updateProgressMessage('Generando contenido del reporte...');
+        const reporteHTML = generarHTMLReporte(detalleParaPDF);
 
         // ============================================================
         // 4. CREAR CONTENEDOR TEMPORAL
         // ============================================================
-
-        container =
-            document.createElement('div');
-
-        container.id =
-            'pdfContainer';
-
+        container = document.createElement('div');
+        container.id = 'pdfContainer';
         container.style.cssText = `
             position: fixed;
             left: -9999px;
             top: 0;
-
             width: 780px;
-
             padding: 0 !important;
             margin: 0 !important;
-
             background: white;
-
             font-family: Arial, sans-serif;
-
             z-index: -1;
-
             opacity: 0;
             pointer-events: none;
-
             overflow: visible;
         `;
-
-        container.innerHTML =
-            reporteHTML;
-
-        document.body.appendChild(
-            container
-        );
-
+        container.innerHTML = reporteHTML;
+        document.body.appendChild(container);
 
         updateProgressBar(50);
+        updateProgressMessage('Renderizando PDF...');
 
-        updateProgressMessage(
-            'Renderizando PDF...'
-        );
-
-        await new Promise(resolve =>
-            setTimeout(resolve, 800)
-        );
-
+        await new Promise(resolve => setTimeout(resolve, 800));
 
         // ============================================================
         // 5. CARGAR html2canvas
         // ============================================================
-
-        if (
-            typeof html2canvas ===
-            'undefined'
-        ) {
-
-            await new Promise(
-                (resolve, reject) => {
-
-                    const script =
-                        document.createElement(
-                            'script'
-                        );
-
-                    script.src =
-                        'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
-
-                    script.onload =
-                        resolve;
-
-                    script.onerror =
-                        reject;
-
-                    document.head.appendChild(
-                        script
-                    );
-                }
-            );
+        if (typeof html2canvas === 'undefined') {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
         }
-
 
         // ============================================================
         // 6. CARGAR jsPDF
         // ============================================================
-
-        if (
-            typeof jspdf ===
-                'undefined' &&
-            typeof window.jspdf ===
-                'undefined'
-        ) {
-
-            await new Promise(
-                (resolve, reject) => {
-
-                    const script =
-                        document.createElement(
-                            'script'
-                        );
-
-                    script.src =
-                        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-
-                    script.onload =
-                        resolve;
-
-                    script.onerror =
-                        reject;
-
-                    document.head.appendChild(
-                        script
-                    );
-                }
-            );
+        if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
         }
 
-
         updateProgressBar(60);
-
-        updateProgressMessage(
-            'Generando archivo PDF...'
-        );
-
+        updateProgressMessage('Generando archivo PDF...');
 
         // ============================================================
         // 7. OBTENER REPORTE
         // ============================================================
-
-        const elemento =
-            container.querySelector(
-                '.reporte-container'
-            );
-
+        const elemento = container.querySelector('.reporte-container');
         if (!elemento) {
-            throw new Error(
-                'No se encontró el contenido del reporte'
-            );
+            throw new Error('No se encontró el contenido del reporte');
         }
-
 
         // ============================================================
         // 8. ASEGURAR QUE SE MUESTRE COMPLETO
         // ============================================================
+        elemento.style.width = '100%';
+        elemento.style.padding = '0';
+        elemento.style.margin = '0';
+        elemento.style.boxSizing = 'border-box';
+        elemento.style.height = 'auto';
+        elemento.style.overflow = 'visible';
+        elemento.style.maxHeight = 'none';
 
-        elemento.style.width =
-            '100%';
-
-        elemento.style.padding =
-            '0';
-
-        elemento.style.margin =
-            '0';
-
-        elemento.style.boxSizing =
-            'border-box';
-
-        elemento.style.height =
-            'auto';
-
-        elemento.style.overflow =
-            'visible';
-
-        elemento.style.maxHeight =
-            'none';
-
-
-        await new Promise(resolve =>
-            setTimeout(resolve, 300)
-        );
-
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         // ============================================================
         // 9. DIMENSIONES
         // ============================================================
+        const anchoContenido = 780;
+        const alturaContenido = elemento.scrollHeight;
 
-        const anchoContenido =
-            780;
-
-        const alturaContenido =
-            elemento.scrollHeight;
-
-
-        console.log(
-            `📄 Ancho contenido: ${anchoContenido}px`
-        );
-
-        console.log(
-            `📄 Alto contenido: ${alturaContenido}px`
-        );
-
+        console.log(`📄 Ancho contenido: ${anchoContenido}px`);
+        console.log(`📄 Alto contenido: ${alturaContenido}px`);
 
         // ============================================================
         // 10. GENERAR CANVAS
         // ============================================================
+        const canvas = await html2canvas(elemento, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            logging: false,
+            width: anchoContenido,
+            height: alturaContenido + 10,
+            scrollY: 0,
+            scrollX: 0,
+            windowHeight: alturaContenido + 10,
+            windowWidth: anchoContenido,
+            onclone: (clonedDoc, clonedElement) => {
+                clonedElement.style.height = 'auto';
+                clonedElement.style.overflow = 'visible';
+                clonedElement.style.maxHeight = 'none';
+                clonedElement.style.width = '100%';
+                clonedElement.style.margin = '0';
+                clonedElement.style.padding = '0';
+            }
+        });
 
-        const canvas =
-            await html2canvas(
-                elemento,
-                {
-                    scale: 2,
-
-                    useCORS: true,
-
-                    allowTaint: true,
-
-                    backgroundColor:
-                        '#ffffff',
-
-                    logging: false,
-
-                    width:
-                        anchoContenido,
-
-                    height:
-                        alturaContenido + 10,
-
-                    scrollY: 0,
-
-                    scrollX: 0,
-
-                    windowHeight:
-                        alturaContenido + 10,
-
-                    windowWidth:
-                        anchoContenido,
-
-                    onclone: (
-                        clonedDoc,
-                        clonedElement
-                    ) => {
-
-                        clonedElement.style.height =
-                            'auto';
-
-                        clonedElement.style.overflow =
-                            'visible';
-
-                        clonedElement.style.maxHeight =
-                            'none';
-
-                        clonedElement.style.width =
-                            '100%';
-
-                        clonedElement.style.margin =
-                            '0';
-
-                        clonedElement.style.padding =
-                            '0';
-                    }
-                }
-            );
-
-
-        console.log(
-            `📸 Canvas generado: ` +
-            `${canvas.width}x${canvas.height}px`
-        );
-
+        console.log(`📸 Canvas generado: ${canvas.width}x${canvas.height}px`);
 
         updateProgressBar(80);
-
-        updateProgressMessage(
-            'Convirtiendo a PDF...'
-        );
-
+        updateProgressMessage('Convirtiendo a PDF...');
 
         // ============================================================
         // 11. CONFIGURACIÓN CARTA
         // ============================================================
+        const { jsPDF } = window.jspdf || jspdf;
 
-        const { jsPDF } =
-            window.jspdf || jspdf;
+        const CARTA_WIDTH_MM = 215.9;
+        const CARTA_HEIGHT_MM = 279.4;
 
+        const MARGEN_LATERAL_MM = 7;
+        const MARGEN_SUPERIOR_MM = 7;
+        const MARGEN_INFERIOR_MM = 7;
 
-        // Carta = 215.9 x 279.4 mm
-        const CARTA_WIDTH_MM =
-            215.9;
-
-        const CARTA_HEIGHT_MM =
-            279.4;
-
-
-        // Márgenes pequeños
-        const MARGEN_LATERAL_MM =
-            7;
-
-        const MARGEN_SUPERIOR_MM =
-            7;
-
-        const MARGEN_INFERIOR_MM =
-            7;
-
-
-        // Área útil
-        const ANCHO_UTIL_MM =
-            CARTA_WIDTH_MM -
-            (MARGEN_LATERAL_MM * 2);
-
-        const ALTO_UTIL_MM =
-            CARTA_HEIGHT_MM -
-            MARGEN_SUPERIOR_MM -
-            MARGEN_INFERIOR_MM;
-
+        const ANCHO_UTIL_MM = CARTA_WIDTH_MM - (MARGEN_LATERAL_MM * 2);
+        const ALTO_UTIL_MM = CARTA_HEIGHT_MM - MARGEN_SUPERIOR_MM - MARGEN_INFERIOR_MM;
 
         // ============================================================
         // 12. CREAR PDF CARTA
         // ============================================================
-
-        const pdf =
-            new jsPDF({
-                orientation: 'portrait',
-
-                unit: 'mm',
-
-                format: 'letter',
-
-                compress: true
-            });
-
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'letter',
+            compress: true
+        });
 
         // ============================================================
         // 13. IMAGEN
         // ============================================================
-
-        const imgData =
-            canvas.toDataURL(
-                'image/jpeg',
-                0.95
-            );
-
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
         // ============================================================
-        // 14. AJUSTAR EL REPORTE AL RECTÁNGULO CARTA
+        // 14. CALCULAR DIMENSIONES MANTENIENDO PROPORCIÓN
         // ============================================================
-        //
-        // IMPORTANTE:
-        //
-        // NO usamos 1.35x.
-        //
-        // El reporte debe entrar completamente en el ancho
-        // de la hoja.
-        //
-        // Como tú confirmaste que este reporte siempre tendrá
-        // la misma cantidad de información y debe ocupar una
-        // sola hoja, ajustamos el contenido al área completa.
-        //
-        // Esto evita:
-        //
-        // ❌ que se corte a los lados
-        // ❌ que aparezca fuera de la página
-        // ❌ que se genere una segunda página
-        //
+        // 🔥 ESTA ES LA CORRECCIÓN CLAVE PARA EL "ESTIRADO"
+        // Calculamos el aspect ratio real del canvas y ajustamos
+        // la imagen respetando esa proporción.
         // ============================================================
 
-        const imgWidthMm =
-            ANCHO_UTIL_MM;
+        const aspectRatio = canvas.height / canvas.width;
 
-        const imgHeightMm =
-            ALTO_UTIL_MM;
+        // Ancho disponible en la hoja
+        const anchoDisponibleMm = ANCHO_UTIL_MM;
 
+        // Altura proporcional que tendría la imagen
+        const alturaProporcionalMm = anchoDisponibleMm * aspectRatio;
 
-        // ============================================================
-        // 15. POSICIÓN
-        // ============================================================
+        let imgWidthMm, imgHeightMm;
 
-        const offsetX =
-            MARGEN_LATERAL_MM;
+        if (alturaProporcionalMm <= ALTO_UTIL_MM) {
+            // Cabe completo en una hoja respetando proporción
+            imgWidthMm = anchoDisponibleMm;
+            imgHeightMm = alturaProporcionalMm;
+        } else {
+            // Es más alto que la hoja → ajustar por altura
+            imgHeightMm = ALTO_UTIL_MM;
+            imgWidthMm = ALTO_UTIL_MM / aspectRatio;
+        }
 
-        const offsetY =
-            MARGEN_SUPERIOR_MM;
+        // Centrar horizontalmente si es más angosto que el área útil
+        const offsetX = MARGEN_LATERAL_MM + (ANCHO_UTIL_MM - imgWidthMm) / 2;
+        const offsetY = MARGEN_SUPERIOR_MM;
 
-
-        // ============================================================
-        // 16. INFORMACIÓN DEBUG
-        // ============================================================
-
-        console.log(
-            '===================================='
-        );
-
-        console.log(
-            '📄 GENERANDO PDF CARTA'
-        );
-
-        console.log(
-            `📐 Hoja: ${CARTA_WIDTH_MM} x ${CARTA_HEIGHT_MM} mm`
-        );
-
-        console.log(
-            `📏 Área útil: ${ANCHO_UTIL_MM} x ${ALTO_UTIL_MM} mm`
-        );
-
-        console.log(
-            `🖼️ Reporte: ${imgWidthMm} x ${imgHeightMm} mm`
-        );
-
-        console.log(
-            `📍 Posición: X=${offsetX}, Y=${offsetY}`
-        );
-
-        console.log(
-            '===================================='
-        );
-
+        console.log('====================================');
+        console.log('📄 GENERANDO PDF CARTA (CON PROPORCIÓN)');
+        console.log(`📐 Hoja: ${CARTA_WIDTH_MM} x ${CARTA_HEIGHT_MM} mm`);
+        console.log(`📏 Área útil: ${ANCHO_UTIL_MM.toFixed(2)} x ${ALTO_UTIL_MM.toFixed(2)} mm`);
+        console.log(`📊 Aspect ratio: ${aspectRatio.toFixed(4)}`);
+        console.log(`🖼️ Reporte: ${imgWidthMm.toFixed(2)} x ${imgHeightMm.toFixed(2)} mm`);
+        console.log(`📍 Posición: X=${offsetX.toFixed(2)}, Y=${offsetY.toFixed(2)}`);
+        console.log('====================================');
 
         // ============================================================
-        // 17. AGREGAR REPORTE
+        // 15. AGREGAR REPORTE AL PDF
         // ============================================================
-
-        pdf.addImage(
-            imgData,
-            'JPEG',
-
-            offsetX,
-            offsetY,
-
-            imgWidthMm,
-            imgHeightMm
-        );
-
+        pdf.addImage(imgData, 'JPEG', offsetX, offsetY, imgWidthMm, imgHeightMm);
 
         // ============================================================
-        // 18. OBTENER PDF COMO BLOB
+        // 16. OBTENER PDF COMO BLOB
         // ============================================================
-
-        const pdfBlob =
-            pdf.output('blob');
-
+        const pdfBlob = pdf.output('blob');
 
         updateProgressBar(90);
-
-        updateProgressMessage(
-            'Preparando para descargar...'
-        );
-
+        updateProgressMessage('Preparando para descargar...');
 
         // ============================================================
-        // 19. DESCARGAR PDF
+        // 17. DESCARGAR PDF
         // ============================================================
-
-        const link =
-            document.createElement('a');
-
-        link.href =
-            URL.createObjectURL(
-                pdfBlob
-            );
-
-        link.download =
-            `Recepcion_${
-                detalleParaPDF.codigo_unico ||
-                'orden'
-            }.pdf`;
-
-        document.body.appendChild(
-            link
-        );
-
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(pdfBlob);
+        link.download = `Recepcion_${detalleParaPDF.codigo_unico || 'orden'}.pdf`;
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
 
-        document.body.removeChild(
-            link
-        );
-
-        URL.revokeObjectURL(
-            link.href
-        );
-
-
-        mostrarNotificacion(
-            '📥 PDF descargado',
-            'success'
-        );
-
+        mostrarNotificacion('📥 PDF descargado', 'success');
 
         // ============================================================
-        // 20. SUBIR A GOOGLE DRIVE
+        // 18. SUBIR A GOOGLE DRIVE
         // ============================================================
-
         updateProgressBar(95);
+        updateProgressMessage('Subiendo PDF a Google Drive...');
 
-        updateProgressMessage(
-            'Subiendo PDF a Google Drive...'
+        const reader = new FileReader();
+        const pdfBase64 = await new Promise((resolve) => {
+            reader.onload = () => resolve(reader.result);
+            reader.readAsDataURL(pdfBlob);
+        });
+
+        const response = await fetchWithToken(
+            `${API_URL}/jefe-operativo/subir-pdf-recepcion`,
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    pdf_base64: pdfBase64,
+                    id_orden: detalleParaPDF.id || detalleParaPDF.id_orden,
+                    codigo_unico: detalleParaPDF.codigo_unico || 'orden'
+                })
+            }
         );
-
-
-        const reader =
-            new FileReader();
-
-
-        const pdfBase64 =
-            await new Promise(
-                (resolve) => {
-
-                    reader.onload =
-                        () => resolve(
-                            reader.result
-                        );
-
-                    reader.readAsDataURL(
-                        pdfBlob
-                    );
-                }
-            );
-
-
-        const response =
-            await fetchWithToken(
-                `${API_URL}/jefe-operativo/subir-pdf-recepcion`,
-                {
-                    method: 'POST',
-
-                    body:
-                        JSON.stringify({
-                            pdf_base64:
-                                pdfBase64,
-
-                            id_orden:
-                                detalleParaPDF.id ||
-                                detalleParaPDF.id_orden,
-
-                            codigo_unico:
-                                detalleParaPDF.codigo_unico ||
-                                'orden'
-                        })
-                }
-            );
-
 
         if (!response.ok) {
-
-            const errorData =
-                await response.json();
-
-            throw new Error(
-                errorData.error ||
-                'Error al subir PDF a Drive'
-            );
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Error al subir PDF a Drive');
         }
 
-
-        const data =
-            await response.json();
-
+        await response.json();
 
         // ============================================================
-        // 21. FINALIZAR
+        // 19. FINALIZAR
         // ============================================================
-
         updateProgressBar(100);
-
-        updateProgressMessage(
-            '¡PDF guardado en Google Drive!'
-        );
-
-
-        // ============================================================
-        // 22. LIMPIAR CONTENEDOR
-        // ============================================================
+        updateProgressMessage('¡PDF guardado en Google Drive!');
 
         setTimeout(() => {
-
-            if (
-                container &&
-                document.body.contains(
-                    container
-                )
-            ) {
-
-                document.body.removeChild(
-                    container
-                );
+            if (container && document.body.contains(container)) {
+                document.body.removeChild(container);
             }
-
         }, 1000);
 
+        mostrarNotificacion('✅ PDF guardado en Google Drive', 'success');
 
-        mostrarNotificacion(
-            '✅ PDF guardado en Google Drive',
-            'success'
-        );
-
-
-        setTimeout(
-            () => completeProgress(true),
-            500
-        );
-
+        setTimeout(() => completeProgress(true), 500);
 
     } catch (error) {
-
-        console.error(
-            'Error generando PDF:',
-            error
-        );
-
-
+        console.error('Error generando PDF:', error);
         completeProgress(false);
+        mostrarNotificacion('❌ Error al generar PDF: ' + error.message, 'error');
 
-
-        mostrarNotificacion(
-            '❌ Error al generar PDF: ' +
-            error.message,
-            'error'
-        );
-
-
-        // Limpiar si ocurrió un error
-        if (
-            container &&
-            document.body.contains(
-                container
-            )
-        ) {
-
-            document.body.removeChild(
-                container
-            );
+        if (container && document.body.contains(container)) {
+            document.body.removeChild(container);
         }
     }
 
-
-    // ============================================================
-    // 23. RESTAURAR BOTÓN
-    // ============================================================
-
     if (btnDescargar) {
-
-        btnDescargar.disabled =
-            false;
-
-        btnDescargar.innerHTML =
-            '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
+        btnDescargar.disabled = false;
+        btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
     }
-
 
     descargandoPDF = false;
 }
-
 function generarHTMLReporte(detalle) {
     if (!detalle) return '<div class="loading-preview"><i class="fas fa-exclamation-triangle"></i><p>No hay datos</p></div>';
 
+    // 🔥 Usar fotos_base64 si existe, sino fotos
     const fotos = detalle.fotos_base64 || detalle.fotos || {};
-    
-    const fotosArray = Object.entries(fotos)
-        .filter(([key, url]) => url && url !== 'null' && url !== 'None' && url !== '')
-        .map(([key, url]) => {
-            let label = key.replace(/url_/g, '').replace(/_/g, ' ').toUpperCase();
-            const labelsMap = {
-                'LATERAL IZQUIERDA': 'Lateral Izq.',
-                'LATERAL DERECHA': 'Lateral Der.',
-                'FOTO FRONTAL': 'Frontal',
-                'FOTO TRASERA': 'Trasera',
-                'FOTO SUPERIOR': 'Superior',
-                'FOTO INFERIOR': 'Inferior',
-                'FOTO TABLERO': 'Tablero'
-            };
-            label = labelsMap[label] || label;
-            return { campo: key, label, url };
-        });
+
+    // ============================================================
+    // SEPARAR FOTOS OBLIGATORIAS Y OPCIONALES
+    // ============================================================
+    const MAPEO_OBLIGATORIAS = {
+        'url_lateral_izquierda': 'Lateral Izq.',
+        'url_lateral_derecha': 'Lateral Der.',
+        'url_foto_frontal': 'Frontal',
+        'url_foto_trasera': 'Trasera',
+        'url_foto_superior': 'Superior',
+        'url_foto_inferior': 'Inferior',
+        'url_foto_tablero': 'Tablero'
+    };
+
+    const fotosObligatorias = [];
+    const fotosOpcionales = [];
+
+    Object.entries(fotos).forEach(([key, url]) => {
+        if (!url || url === 'null' || url === 'None' || url === '' || url === 'undefined') return;
+
+        // Detectar si es opcional (url_opcionalN)
+        if (key.startsWith('url_opcional') || key.startsWith('opcional')) {
+            const num = key.replace('url_opcional', '').replace('opcional', '');
+            fotosOpcionales.push({
+                campo: key,
+                label: `Adicional ${num}`,
+                url: url
+            });
+        } else if (MAPEO_OBLIGATORIAS[key]) {
+            fotosObligatorias.push({
+                campo: key,
+                label: MAPEO_OBLIGATORIAS[key],
+                url: url
+            });
+        } else if (key.startsWith('url_')) {
+            // Cualquier otra url_ se considera obligatoria con label limpio
+            const label = key.replace('url_', '').replace(/_/g, ' ');
+            fotosObligatorias.push({
+                campo: key,
+                label: label.charAt(0).toUpperCase() + label.slice(1),
+                url: url
+            });
+        }
+    });
+
+    const totalObligatorias = fotosObligatorias.length;
+    const totalOpcionales = fotosOpcionales.length;
+
+    console.log(`📸 Fotos obligatorias: ${totalObligatorias}/7`);
+    console.log(`📸 Fotos opcionales: ${totalOpcionales}`);
 
     const fechaActual = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const fechaIngreso = detalle.fecha_ingreso ? new Date(detalle.fecha_ingreso).toLocaleString('es-ES') : 'No registrada';
-    
+
     const jefeNombre1 = detalle.jefe_operativo?.nombre || 'No asignado';
     const jefeNombre2 = detalle.jefe_operativo_2?.nombre || null;
 
     // ============================================================
-    // HTML MEJORADO - 2 LINEAS DE FOTOS Y FIRMAS CON MÁS ESPACIO
+    // HTML - FOTOS OBLIGATORIAS (2 filas: 4 + 3)
+    // ============================================================
+    const generarFotosObligatoriasHTML = () => {
+        if (totalObligatorias === 0) {
+            return '<p style="color:#999; font-style:italic; font-size:9px; text-align:center; padding:4px;">No se registraron fotos obligatorias</p>';
+        }
+
+        const primeraFila = fotosObligatorias.slice(0, 4);
+        const segundaFila = fotosObligatorias.slice(4, 7);
+
+        const renderFoto = (f) => `
+            <div style="border:1px solid #ddd; border-radius:4px; overflow:hidden; background:#f5f5f5; text-align:center;">
+                <img src="${f.url}" alt="${f.label}" style="width:100%; height:65px; object-fit:cover; display:block; background:#eee; border-bottom:1px solid #ddd;" onerror="this.style.display='none'">
+                <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f9f9f9;">${f.label}</div>
+            </div>
+        `;
+
+        let html = `<div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:4px; margin-bottom:3px;">`;
+        html += primeraFila.map(renderFoto).join('');
+        // Rellenar con placeholders si faltan
+        for (let i = primeraFila.length; i < 4; i++) {
+            html += `<div style="border:1px dashed #ddd; border-radius:4px; background:#fafafa; min-height:65px; display:flex; align-items:center; justify-content:center; color:#ccc; font-size:7px;"><span>Sin foto</span></div>`;
+        }
+        html += `</div>`;
+
+        if (segundaFila.length > 0) {
+            html += `<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; max-width:75%; margin:0 auto;">`;
+            html += segundaFila.map(renderFoto).join('');
+            html += `</div>`;
+        }
+
+        return html;
+    };
+
+    // ============================================================
+    // HTML - FOTOS OPCIONALES (grid de 4 columnas)
+    // ============================================================
+    const generarFotosOpcionalesHTML = () => {
+        if (totalOpcionales === 0) {
+            return '';
+        }
+
+        const renderFotoOpcional = (f) => `
+            <div style="border:1px solid #ddd; border-radius:4px; overflow:hidden; background:#f5f5f5; text-align:center;">
+                <img src="${f.url}" alt="${f.label}" style="width:100%; height:60px; object-fit:cover; display:block; background:#eee; border-bottom:1px solid #ddd;" onerror="this.style.display='none'">
+                <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f0f0f0;">${f.label}</div>
+            </div>
+        `;
+
+        return `
+            <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; margin-bottom:6px; border:1px solid #eee;">
+                <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:4px; border-bottom:1px solid #ddd; padding-bottom:2px;">
+                    📸 Fotos Adicionales (${totalOpcionales})
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:4px;">
+                    ${fotosOpcionales.map(renderFotoOpcional).join('')}
+                </div>
+            </div>
+        `;
+    };
+
+    // ============================================================
+    // RETORNAR HTML COMPLETO
     // ============================================================
     return `<div class="reporte-container" style="
         width: 100%;
@@ -4577,7 +4834,7 @@ function generarHTMLReporte(detalle) {
                 <span style="font-size:6px; color:#999;">Tel: +591 4 1234567</span>
             </div>
         </div>
-        
+
         <!-- TÍTULO -->
         <div style="text-align:center; margin-bottom:8px;">
             <h2 style="font-size:12px; color:#C1121F; margin:0; letter-spacing:2px; text-transform:uppercase;">Orden de Trabajo - Recepción</h2>
@@ -4585,7 +4842,7 @@ function generarHTMLReporte(detalle) {
                 # ${detalle.codigo_unico || 'OT-N/A'}
             </div>
         </div>
-        
+
         <!-- INFORMACIÓN GENERAL -->
         <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; margin-bottom:6px; border:1px solid #eee;">
             <div style="display:flex; flex-wrap:wrap; gap:3px 14px; font-size:8.5px;">
@@ -4596,10 +4853,9 @@ function generarHTMLReporte(detalle) {
                 ${jefeNombre2 ? `<span><strong>👨‍💼 Jefe Op. 2:</strong> ${jefeNombre2}</span>` : ''}
             </div>
         </div>
-        
-        <!-- CLIENTE + VEHÍCULO (2 COLUMNAS) -->
+
+        <!-- CLIENTE + VEHÍCULO -->
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:6px;">
-            <!-- CLIENTE -->
             <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; border:1px solid #eee;">
                 <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:3px; border-bottom:1px solid #ddd; padding-bottom:2px;">👤 Datos del Cliente</div>
                 <div style="font-size:8.5px; line-height:1.6;">
@@ -4608,8 +4864,6 @@ function generarHTMLReporte(detalle) {
                     <div><strong>Ubicación:</strong> ${detalle.cliente_ubicacion || 'No especificada'}</div>
                 </div>
             </div>
-            
-            <!-- VEHÍCULO -->
             <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; border:1px solid #eee;">
                 <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:3px; border-bottom:1px solid #ddd; padding-bottom:2px;">🚗 Datos del Vehículo</div>
                 <div style="font-size:8.5px; line-height:1.6;">
@@ -4620,92 +4874,34 @@ function generarHTMLReporte(detalle) {
                 </div>
             </div>
         </div>
-        
-        <!-- 🔥 FOTOS - 2 LÍNEAS: 4 + 3 CENTRADAS -->
+
+        <!-- FOTOS OBLIGATORIAS -->
         <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; margin-bottom:6px; border:1px solid #eee;">
-            <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:4px; border-bottom:1px solid #ddd; padding-bottom:2px;">📸 Fotos (${fotosArray.length}/7)</div>
-            ${fotosArray.length > 0 ? `
-                <!-- PRIMERA FILA: 4 FOTOS -->
-                <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:4px; margin-bottom:3px;">
-                    ${fotosArray.slice(0, 4).map(f => `
-                        <div style="
-                            border:1px solid #ddd; 
-                            border-radius:4px; 
-                            overflow:hidden; 
-                            background:#f5f5f5; 
-                            text-align:center;
-                        ">
-                            <img src="${f.url}" alt="${f.label}" style="
-                                width:100%; 
-                                height:65px; 
-                                object-fit:cover; 
-                                display:block; 
-                                background:#eee;
-                                border-bottom:1px solid #ddd;
-                            " onerror="this.style.display='none'">
-                            <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f9f9f9;">${f.label}</div>
-                        </div>
-                    `).join('')}
-                    ${fotosArray.length < 4 ? Array(4 - fotosArray.length).fill(`
-                        <div style="border:1px dashed #ddd; border-radius:4px; background:#fafafa; min-height:65px; display:flex; align-items:center; justify-content:center; color:#ccc; font-size:7px;">
-                            <span>Sin foto</span>
-                        </div>
-                    `).join('') : ''}
-                </div>
-                <!-- SEGUNDA FILA: 3 FOTOS CENTRADAS -->
-                ${fotosArray.length > 4 ? `
-                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; max-width:75%; margin:0 auto;">
-                        ${fotosArray.slice(4, 7).map(f => `
-                            <div style="
-                                border:1px solid #ddd; 
-                                border-radius:4px; 
-                                overflow:hidden; 
-                                background:#f5f5f5; 
-                                text-align:center;
-                            ">
-                                <img src="${f.url}" alt="${f.label}" style="
-                                    width:100%; 
-                                    height:65px; 
-                                    object-fit:cover; 
-                                    display:block; 
-                                    background:#eee;
-                                    border-bottom:1px solid #ddd;
-                                " onerror="this.style.display='none'">
-                                <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f9f9f9;">${f.label}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : ''}
-            ` : '<p style="color:#999; font-style:italic; font-size:9px; text-align:center; padding:4px;">No se registraron fotos</p>'}
+            <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:4px; border-bottom:1px solid #ddd; padding-bottom:2px;">
+                📸 Fotos Obligatorias (${totalObligatorias}/7)
+            </div>
+            ${generarFotosObligatoriasHTML()}
         </div>
-        
+
+        <!-- FOTOS OPCIONALES (solo si hay) -->
+        ${generarFotosOpcionalesHTML()}
+
         <!-- DESCRIPCIÓN -->
         <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; margin-bottom:6px; border:1px solid #eee;">
             <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:3px; border-bottom:1px solid #ddd; padding-bottom:2px;">📝 Descripción del Problema</div>
-            <div style="
-                background:white; 
-                padding:5px 8px; 
-                border-radius:4px; 
-                font-size:8.5px; 
-                min-height:22px; 
-                border:1px solid #e8e8e8; 
-                white-space:pre-wrap; 
-                line-height:1.5;
-            ">${detalle.transcripcion_problema || 'No se registró descripción'}</div>
+            <div style="background:white; padding:5px 8px; border-radius:4px; font-size:8.5px; min-height:22px; border:1px solid #e8e8e8; white-space:pre-wrap; line-height:1.5;">${detalle.transcripcion_problema || 'No se registró descripción'}</div>
         </div>
-        
-        <!-- 🔥 FIRMAS - CON MÁS ESPACIO Y MEJOR PRESENTACIÓN -->
+
+        <!-- FIRMAS -->
         <div style="margin-top:10px; padding-top:8px; border-top:2px solid #ddd;">
             <div style="font-weight:700; font-size:10px; color:#C1121F; text-align:center; margin-bottom:10px; letter-spacing:2px; text-transform:uppercase;">✍️ Firmas de Conformidad</div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:50px;">
-                <!-- FIRMA CLIENTE -->
                 <div style="text-align:center; padding:0 5px;">
                     <div style="font-weight:600; color:#333; margin-bottom:8px; font-size:8.5px; text-transform:uppercase; letter-spacing:1px;">Firma del Cliente</div>
                     <div style="border-bottom:2px solid #333; height:60px; margin-bottom:5px;"></div>
                     <div style="font-size:9px; color:#555; font-weight:600; margin-top:4px;">${detalle.cliente_nombre || '____________________'}</div>
                     <div style="font-size:7px; color:#999; margin-top:2px;">${fechaActual}</div>
                 </div>
-                <!-- FIRMA JEFE OPERATIVO -->
                 <div style="text-align:center; padding:0 5px;">
                     <div style="font-weight:600; color:#333; margin-bottom:8px; font-size:8.5px; text-transform:uppercase; letter-spacing:1px;">Firma del Jefe Operativo</div>
                     <div style="border-bottom:2px solid #333; height:60px; margin-bottom:5px;"></div>
@@ -4714,11 +4910,11 @@ function generarHTMLReporte(detalle) {
                 </div>
             </div>
         </div>
-        
+
         <!-- FOOTER -->
         <div style="text-align:center; margin-top:12px; padding-top:5px; border-top:1px solid #eee; font-size:6px; color:#bbb; line-height:1.3;">
-            <span>Documento generado automáticamente por <strong style="color:#C1121F;">FURIA MOTOR</strong></span> | 
-            <span>Código: <strong>${detalle.codigo_unico || 'N/A'}</strong></span> | 
+            <span>Documento generado automáticamente por <strong style="color:#C1121F;">FURIA MOTOR</strong></span> |
+            <span>Código: <strong>${detalle.codigo_unico || 'N/A'}</strong></span> |
             <span>${new Date().toLocaleString('es-ES')}</span>
         </div>
     </div>`;
@@ -4818,19 +5014,7 @@ async function cargarDatosOrdenCompleta(idOrden) {
         if (data.success && data.detalle) {
             datosReporteFinal = data.detalle;
             datosReporteFinal.id_orden = idOrden;
-            const fotos = datosReporteFinal.fotos || {};
-            const fotosBase64 = {};
-            const camposFotos = ['url_lateral_izquierda', 'url_lateral_derecha', 'url_foto_frontal', 'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero'];
-            const fotosValidas = camposFotos.filter(c => fotos[c] && fotos[c] !== 'null' && fotos[c] !== 'None' && fotos[c] !== '');
-            for (const campo of fotosValidas) {
-                const url = fotos[campo];
-                try {
-                    const base64 = await convertirImagenABase64(url);
-                    fotosBase64[campo] = base64;
-                } catch (error) { fotosBase64[campo] = url; }
-            }
-            datosReporteFinal.fotos_base64 = fotosBase64;
-            datosReporteFinal.fotos = fotosBase64;
+            // 🔥 NO convertir aquí: descargarPDFFinal lo hará por todas
             return datosReporteFinal;
         }
         throw new Error(data.error || 'No se pudieron obtener los datos');

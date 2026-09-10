@@ -803,7 +803,9 @@ def finalizar_sesion(current_user):
         
         logger.info(f"📋 Finalizando sesión: {codigo_sesion}")
         
-        # Cargar sesión
+        # =============================================
+        # 1. CARGAR SESIÓN (memoria o BD)
+        # =============================================
         if codigo_sesion not in sesiones_activas:
             sesion = cargar_sesion_de_db(codigo_sesion)
             if not sesion:
@@ -816,24 +818,27 @@ def finalizar_sesion(current_user):
             return jsonify({'error': 'Sesión no activa'}), 400
         
         # =============================================
-        # 🔥 1. ACTUALIZAR SESIÓN CON DATOS DEL FRONTEND
+        # 2. ACTUALIZAR SESIÓN CON DATOS DEL FRONTEND
         # =============================================
         if datos_frontend:
-            # Actualizar cliente
+            # Cliente
             if 'cliente' in datos_frontend:
                 sesion['datos']['cliente'] = datos_frontend['cliente']
             
-            # Actualizar vehículo
+            # Vehículo
             if 'vehiculo' in datos_frontend:
                 sesion['datos']['vehiculo'] = datos_frontend['vehiculo']
             
-            # 🔥 ACTUALIZAR FOTOS OBLIGATORIAS
+            # 🔥 FOTOS OBLIGATORIAS
             if 'fotos' in datos_frontend:
                 fotos_frontend = datos_frontend['fotos']
                 if 'fotos' not in sesion['datos']:
                     sesion['datos']['fotos'] = {}
                 
-                campos_obligatorios = ['lateral_izquierdo', 'lateral_derecho', 'frontal', 'trasera', 'superior', 'inferior', 'tablero']
+                campos_obligatorios = [
+                    'lateral_izquierdo', 'lateral_derecho', 'frontal',
+                    'trasera', 'superior', 'inferior', 'tablero'
+                ]
                 fotos_validas = 0
                 
                 for campo in campos_obligatorios:
@@ -845,7 +850,7 @@ def finalizar_sesion(current_user):
                 sesion['secciones_completadas']['fotos'] = fotos_validas == 7
                 logger.info(f"📸 Fotos obligatorias válidas: {fotos_validas}/7")
             
-            # 🔥🔥🔥 NUEVO: GUARDAR FOTOS OPCIONALES
+            # 🔥 FOTOS OPCIONALES
             fotos_opcionales = datos_frontend.get('fotos_opcionales', {})
             if fotos_opcionales:
                 if 'fotos' not in sesion['datos']:
@@ -858,7 +863,7 @@ def finalizar_sesion(current_user):
                 
                 logger.info(f"📸 Total fotos opcionales guardadas: {len(fotos_opcionales)}")
             
-            # 🔥 GUARDAR COMENTARIOS DE FOTOS OPCIONALES
+            # 🔥 COMENTARIOS DE FOTOS OPCIONALES
             comentarios = datos_frontend.get('comentarios', {})
             if comentarios:
                 if 'comentarios' not in sesion['datos']:
@@ -868,18 +873,18 @@ def finalizar_sesion(current_user):
                         sesion['datos']['comentarios'][campo] = valor.strip()
                         logger.info(f"📝 Comentario guardado: {campo} -> {valor}")
             
-            # Actualizar descripción
+            # Descripción
             if 'descripcion' in datos_frontend:
                 sesion['datos']['descripcion'] = datos_frontend['descripcion']
                 if datos_frontend['descripcion'].get('texto') and datos_frontend['descripcion'].get('audio_url'):
                     sesion['secciones_completadas']['descripcion'] = True
             
-            # Guardar sesión actualizada
+            # Guardar sesión actualizada en memoria y BD
             guardar_sesion_en_db(sesion)
             sesiones_activas[codigo_sesion] = sesion
         
         # =============================================
-        # 🔥 2. RECALCULAR SECCIONES COMPLETADAS
+        # 3. RECALCULAR SECCIONES COMPLETADAS
         # =============================================
         cliente_data = sesion['datos'].get('cliente', {})
         cliente_completo = bool(
@@ -902,7 +907,7 @@ def finalizar_sesion(current_user):
         guardar_sesion_en_db(sesion)
         
         # =============================================
-        # 3. VERIFICAR SECCIONES FALTANTES
+        # 4. VERIFICAR SECCIONES FALTANTES
         # =============================================
         secciones_faltantes = []
         if not sesion['secciones_completadas'].get('cliente', False):
@@ -922,7 +927,7 @@ def finalizar_sesion(current_user):
             }), 400
         
         # =============================================
-        # 4. CREAR ORDEN DE TRABAJO
+        # 5. CREAR ORDEN DE TRABAJO
         # =============================================
         try:
             cliente_data = sesion['datos'].get('cliente', {})
@@ -934,7 +939,9 @@ def finalizar_sesion(current_user):
             logger.info(f"📸 Total fotos en sesión al finalizar: {len(fotos)}")
             logger.info(f"📸 Fotos: {list(fotos.keys())}")
             
-            # 1. Obtener o crear cliente
+            # ---------------------------------------------
+            # 5.1 Obtener o crear cliente
+            # ---------------------------------------------
             id_cliente = None
             id_usuario = None
             
@@ -1001,7 +1008,9 @@ def finalizar_sesion(current_user):
             if not id_cliente:
                 return jsonify({'error': 'Error creando cliente'}), 500
             
-            # 2. Obtener o crear vehículo
+            # ---------------------------------------------
+            # 5.2 Obtener o crear vehículo
+            # ---------------------------------------------
             placa = vehiculo_data.get('placa', '').upper()
             id_vehiculo = None
             
@@ -1039,7 +1048,9 @@ def finalizar_sesion(current_user):
             if not id_vehiculo:
                 return jsonify({'error': 'Error creando vehículo'}), 500
             
-            # 3. Generar código único
+            # ---------------------------------------------
+            # 5.3 Generar código único (OT-YYMMDD-NNN)
+            # ---------------------------------------------
             fecha = datetime.datetime.now()
             inicio_dia = datetime.datetime.combine(fecha.date(), datetime.time.min)
             fin_dia = datetime.datetime.combine(fecha.date(), datetime.time.max)
@@ -1067,7 +1078,9 @@ def finalizar_sesion(current_user):
             
             codigo_unico = f"OT-{fecha.strftime('%y%m%d')}-{str(siguiente).zfill(3)}"
             
-            # 4. Crear orden de trabajo
+            # ---------------------------------------------
+            # 5.4 Crear orden de trabajo
+            # ---------------------------------------------
             orden_data = {
                 'codigo_unico': codigo_unico,
                 'id_vehiculo': id_vehiculo,
@@ -1089,7 +1102,9 @@ def finalizar_sesion(current_user):
             
             id_orden = orden_result.data[0]['id']
             
-            # 5. Guardar recepción
+            # ---------------------------------------------
+            # 5.5 Guardar recepción (fotos obligatorias + audio + descripción)
+            # ---------------------------------------------
             MAPEO_FOTOS = {
                 'lateral_izquierdo': 'url_lateral_izquierda',
                 'lateral_derecho': 'url_lateral_derecha',
@@ -1100,22 +1115,19 @@ def finalizar_sesion(current_user):
                 'tablero': 'url_foto_tablero'
             }
             
-            # Construir datos de recepción (solo obligatorias)
             recepcion_data = {
                 'id_orden_trabajo': id_orden,
                 'url_grabacion_problema': descripcion_data.get('audio_url'),
                 'transcripcion_problema': descripcion_data.get('texto', '')
             }
             
-            # Agregar fotos obligatorias
             for campo, db_campo in MAPEO_FOTOS.items():
                 url = fotos.get(campo)
                 if url and url != 'null' and url != '' and url != 'undefined' and url != 'None':
                     recepcion_data[db_campo] = url
             
-            # Insertar recepción
             try:
-                resultado = supabase.table('recepcion').insert(recepcion_data).execute()
+                supabase.table('recepcion').insert(recepcion_data).execute()
                 logger.info(f"✅ Recepción guardada exitosamente")
             except Exception as e:
                 logger.error(f"❌ Error guardando recepción: {e}")
@@ -1124,47 +1136,64 @@ def finalizar_sesion(current_user):
                 }).execute()
                 logger.info(f"✅ Recepción básica guardada")
             
-            # 🔥🔥🔥 NUEVO: GUARDAR FOTOS OPCIONALES Y COMENTARIOS EN LA SESIÓN COLABORATIVA
-            # Extraer fotos opcionales (opcional1 a opcional10)
-            fotos_opcionales_guardar = {}
-            for i in range(1, 11):
-                campo = f'opcional{i}'
-                if campo in fotos and fotos[campo]:
-                    fotos_opcionales_guardar[campo] = fotos[campo]
+            # =============================================
+            # 🔥 5.6 GUARDAR codigo_orden + fotos opcionales + comentarios
+            #         EN LA SESIÓN COLABORATIVA
+            # =============================================
+            # Esto es CLAVE para que detalle_recepcion encuentre la sesión
+            # por codigo_orden de forma confiable (no por placa)
+            # =============================================
+            try:
+                # Extraer fotos opcionales (opcional1 a opcional10)
+                fotos_opcionales_guardar = {}
+                for i in range(1, 11):
+                    campo = f'opcional{i}'
+                    if campo in fotos and fotos[campo]:
+                        fotos_opcionales_guardar[campo] = fotos[campo]
+                
+                # Obtener comentarios de la sesión
+                comentarios_guardar = sesion.get('datos', {}).get('comentarios', {})
+                
+                # Construir datos actualizados con codigo_orden
+                datos_actualizados = sesion.get('datos', {})
+                datos_actualizados['codigo_orden'] = codigo_unico
+                
+                # Asegurar que las fotos opcionales estén en datos.fotos
+                if 'fotos' not in datos_actualizados:
+                    datos_actualizados['fotos'] = {}
+                for campo, url in fotos_opcionales_guardar.items():
+                    datos_actualizados['fotos'][campo] = url
+                
+                # Agregar comentarios dentro de datos
+                if comentarios_guardar:
+                    datos_actualizados['comentarios'] = comentarios_guardar
+                
+                # UN SOLO UPDATE: guarda codigo_orden, fotos opcionales,
+                # comentarios y marca como finalizada
+                supabase.table('sesion_colaborativa') \
+                    .update({
+                        'datos': datos_actualizados,
+                        'comentarios': comentarios_guardar if comentarios_guardar else {},
+                        'estado': 'finalizada'
+                    }) \
+                    .eq('codigo', codigo_sesion) \
+                    .execute()
+                
+                logger.info(f"✅ Sesión {codigo_sesion} actualizada:")
+                logger.info(f"   codigo_orden: {codigo_unico}")
+                logger.info(f"   fotos opcionales: {len(fotos_opcionales_guardar)}")
+                logger.info(f"   comentarios: {len(comentarios_guardar) if comentarios_guardar else 0}")
+                
+            except Exception as e:
+                logger.error(f"❌ Error guardando datos finales en sesión colaborativa: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                # No lanzamos excepción para no romper el flujo
+                # (la orden ya está creada, solo perdemos fotos opcionales)
             
-            # Obtener comentarios de la sesión
-            comentarios_guardar = sesion.get('datos', {}).get('comentarios', {})
-            
-            # Guardar en la sesión colaborativa
-            if fotos_opcionales_guardar or comentarios_guardar:
-                try:
-                    datos_actualizados = sesion.get('datos', {})
-                    if 'fotos' not in datos_actualizados:
-                        datos_actualizados['fotos'] = {}
-                    
-                    # Agregar fotos opcionales
-                    for campo, url in fotos_opcionales_guardar.items():
-                        datos_actualizados['fotos'][campo] = url
-                    
-                    # Agregar comentarios
-                    if comentarios_guardar:
-                        datos_actualizados['comentarios'] = comentarios_guardar
-                    
-                    # Guardar en Supabase
-                    supabase.table('sesion_colaborativa') \
-                        .update({
-                            'datos': datos_actualizados,
-                            'comentarios': comentarios_guardar
-                        }) \
-                        .eq('codigo', codigo_sesion) \
-                        .execute()
-                    
-                    logger.info(f"✅ Fotos opcionales guardadas en sesión: {len(fotos_opcionales_guardar)}")
-                    logger.info(f"✅ Comentarios guardados en sesión: {len(comentarios_guardar)}")
-                except Exception as e:
-                    logger.error(f"❌ Error guardando fotos opcionales: {e}")
-            
-            # 6. Renombrar carpeta en Drive
+            # ---------------------------------------------
+            # 5.7 Renombrar carpeta en Drive
+            # ---------------------------------------------
             carpeta_renombrada = False
             try:
                 logger.info(f"📁 Intentando renombrar carpeta {codigo_sesion} a {codigo_unico}")
@@ -1183,9 +1212,12 @@ def finalizar_sesion(current_user):
             except Exception as e:
                 logger.error(f"❌ Error renombrando carpeta: {str(e)}")
             
-            # 7. Marcar sesión como finalizada
+            # ---------------------------------------------
+            # 5.8 Limpiar sesión de memoria
+            # ---------------------------------------------
+            # NOTA: la sesión ya se marcó como 'finalizada' en BD arriba.
+            # Actualizamos también la copia en memoria y la quitamos.
             sesion['estado'] = 'finalizada'
-            guardar_sesion_en_db(sesion)
             
             if codigo_sesion in sesiones_activas:
                 del sesiones_activas[codigo_sesion]
@@ -2006,10 +2038,9 @@ def detalle_recepcion(current_user, id_orden):
             return jsonify({'error': f'Orden {id_orden} no encontrada'}), 404
         
         orden = orden_result.data[0]
+        codigo_unico = orden.get('codigo_unico')
         
-        # =============================================
-        # OBTENER JEFE OPERATIVO PRINCIPAL
-        # =============================================
+        # Obtener jefe principal
         jefe_principal = {}
         if orden.get('id_jefe_operativo'):
             try:
@@ -2022,9 +2053,7 @@ def detalle_recepcion(current_user, id_orden):
             except Exception as e:
                 logger.warning(f"⚠️ Error obteniendo jefe principal: {e}")
         
-        # =============================================
-        # OBTENER JEFE OPERATIVO SECUNDARIO
-        # =============================================
+        # Obtener jefe secundario
         jefe_secundario = {}
         if orden.get('id_jefe_operativo_2'):
             try:
@@ -2037,9 +2066,7 @@ def detalle_recepcion(current_user, id_orden):
             except Exception as e:
                 logger.warning(f"⚠️ Error obteniendo jefe secundario: {e}")
         
-        # =============================================
-        # OBTENER VEHÍCULO
-        # =============================================
+        # Obtener vehículo
         vehiculo = {}
         if orden.get('id_vehiculo'):
             try:
@@ -2052,9 +2079,7 @@ def detalle_recepcion(current_user, id_orden):
             except Exception as e:
                 logger.warning(f"⚠️ Error obteniendo vehículo: {e}")
         
-        # =============================================
-        # OBTENER CLIENTE Y USUARIO
-        # =============================================
+        # Obtener cliente y usuario
         usuario = {}
         cliente_data = {}
         if vehiculo.get('id_cliente'):
@@ -2075,9 +2100,7 @@ def detalle_recepcion(current_user, id_orden):
             except Exception as e:
                 logger.warning(f"⚠️ Error obteniendo cliente: {e}")
         
-        # =============================================
-        # OBTENER RECEPCIÓN
-        # =============================================
+        # Obtener recepción (fotos obligatorias)
         recepcion_result = supabase.table('recepcion') \
             .select('*') \
             .eq('id_orden_trabajo', id_orden) \
@@ -2086,44 +2109,68 @@ def detalle_recepcion(current_user, id_orden):
         recepcion = recepcion_result.data[0] if recepcion_result.data else {}
         
         # =============================================
-        # OBTENER SESIÓN COLABORATIVA PARA FOTOS OPCIONALES
+        # 🔥 OBTENER FOTOS OPCIONALES - CORREGIDO
         # =============================================
+        # Estrategia 1: Buscar por codigo_orden guardado en datos
+        # Estrategia 2: Buscar por codigo (si se renombró)
+        # Estrategia 3 (fallback): Buscar por placa
+        
         sesion = None
         comentarios = {}
         fotos_opcionales = {}
         
         try:
-            # Buscar sesión colaborativa por código de orden
-            # Primero intentamos obtener la sesión por el código de la orden
-            sesion_result = supabase.table('sesion_colaborativa') \
-                .select('datos, comentarios') \
+            # ESTRATEGIA 1: Buscar todas las sesiones finalizadas
+            # y filtrar por codigo_orden dentro de datos
+            sesiones_result = supabase.table('sesion_colaborativa') \
+                .select('codigo, datos, comentarios') \
                 .eq('estado', 'finalizada') \
                 .execute()
             
-            for s in (sesion_result.data or []):
-                datos_sesion = s.get('datos', {})
-                # Buscar si los datos de la sesión coinciden con la orden
-                if datos_sesion.get('vehiculo', {}).get('placa') == vehiculo.get('placa'):
-                    sesion = s
-                    break
+            # 1a. Buscar por codigo_orden en datos (más confiable)
+            if codigo_unico:
+                for s in (sesiones_result.data or []):
+                    datos_sesion = s.get('datos', {})
+                    if datos_sesion.get('codigo_orden') == codigo_unico:
+                        sesion = s
+                        logger.info(f"✅ Sesión encontrada por codigo_orden: {s['codigo']}")
+                        break
+                    
+                    # Por si acaso, buscar por codigo igual al codigo_unico
+                    if s.get('codigo') == codigo_unico:
+                        sesion = s
+                        logger.info(f"✅ Sesión encontrada por codigo (renombrado): {s['codigo']}")
+                        break
+            
+            # 1b. Fallback: buscar por placa
+            if not sesion and vehiculo.get('placa'):
+                placa = vehiculo.get('placa')
+                for s in (sesiones_result.data or []):
+                    datos_sesion = s.get('datos', {})
+                    if datos_sesion.get('vehiculo', {}).get('placa') == placa:
+                        sesion = s
+                        logger.info(f"⚠️ Sesión encontrada por placa (fallback): {s['codigo']}")
+                        break
+                        
         except Exception as e:
-            logger.warning(f"⚠️ Error obteniendo sesión: {e}")
+            logger.warning(f"⚠️ Error buscando sesión colaborativa: {e}")
         
-        # =============================================
-        # RECUPERAR FOTOS OPCIONALES DE LA SESIÓN
-        # =============================================
+        # Extraer fotos opcionales de la sesión
         if sesion:
             datos_sesion = sesion.get('datos', {})
             fotos_sesion = datos_sesion.get('fotos', {})
-            comentarios = sesion.get('comentarios', {})
+            # Comentarios pueden estar en la columna 'comentarios' o en datos['comentarios']
+            comentarios = sesion.get('comentarios', {}) or datos_sesion.get('comentarios', {})
             
-            # Extraer fotos opcionales (opcional1 a opcional10)
             for i in range(1, 11):
                 campo = f'opcional{i}'
                 if campo in fotos_sesion and fotos_sesion[campo]:
                     fotos_opcionales[f'url_{campo}'] = fotos_sesion[campo]
             
             logger.info(f"📸 Fotos opcionales recuperadas: {len(fotos_opcionales)}")
+            logger.info(f"📝 Comentarios recuperados: {len(comentarios) if comentarios else 0}")
+        else:
+            logger.warning(f"⚠️ No se encontró sesión colaborativa para orden {id_orden} ({codigo_unico})")
         
         # =============================================
         # CONSTRUIR FOTOS COMPLETAS
@@ -2138,10 +2185,9 @@ def detalle_recepcion(current_user, id_orden):
             'url_foto_tablero': recepcion.get('url_foto_tablero')
         }
         
-        # Combinar todas las fotos
         todas_las_fotos = {**fotos_obligatorias, **fotos_opcionales}
         
-        # Limpiar URLs nulas
+        # Normalizar URLs
         fotos_limpias = {}
         for key, value in todas_las_fotos.items():
             if value and value != 'null' and value != 'None' and value != '':
@@ -2154,7 +2200,7 @@ def detalle_recepcion(current_user, id_orden):
         # =============================================
         detalle = {
             'id': orden['id'],
-            'codigo_unico': orden.get('codigo_unico', 'OT-N/A'),
+            'codigo_unico': codigo_unico or 'OT-N/A',
             'fecha_ingreso': orden.get('fecha_ingreso'),
             'estado_global': orden.get('estado_global', 'EnRecepcion'),
             'jefe_operativo': jefe_principal,
@@ -2171,13 +2217,14 @@ def detalle_recepcion(current_user, id_orden):
             'longitud': cliente_data.get('longitud'),
             'ubicacion_confirmada': cliente_data.get('ubicacion_confirmada', False),
             'fotos': fotos_limpias,
-            'comentarios': comentarios,
+            'comentarios': comentarios or {},
             'audio_url': normalizar_url_drive(recepcion.get('url_grabacion_problema')),
             'transcripcion_problema': recepcion.get('transcripcion_problema', ''),
             'url_pdf': recepcion.get('url_pdf')
         }
         
-        logger.info(f"📸 Total fotos: {sum(1 for v in fotos_limpias.values() if v)}")
+        total_fotos = sum(1 for v in fotos_limpias.values() if v)
+        logger.info(f"📸 Total fotos en respuesta: {total_fotos} (obligatorias + opcionales)")
         
         return jsonify({'success': True, 'detalle': detalle}), 200
         
@@ -2186,7 +2233,6 @@ def detalle_recepcion(current_user, id_orden):
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
-
 # =====================================================
 # ENDPOINT 23: OBTENER AUDIO ESPECÍFICO
 # =====================================================

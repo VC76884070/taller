@@ -245,10 +245,8 @@ async function cargarEstadisticas() {
         if (response.ok && data.success) {
             const stats = data.estadisticas;
 
-            document.getElementById('totalPersonal').textContent = stats.total_usuarios || 0;
-            document.getElementById('totalClientes').textContent = stats.total_clientes || 0;
-            const totalVehiculos = document.getElementById('totalVehiculos');
-            if (totalVehiculos) totalVehiculos.textContent = stats.total_vehiculos || 0;
+            // NOTA: Ya no actualizamos los badges de los tabs (fueron eliminados del HTML)
+            // Solo actualizamos las tarjetas de estadísticas de la pestaña Personal
 
             for (const rol of stats.usuarios_por_rol) {
                 const rolNombre = rol.rol_nombre;
@@ -333,7 +331,7 @@ async function cargarAsignacionesActivas(usuarioId) {
 }
 
 // =====================================================
-// RENDER - PERSONAL
+// RENDER - PERSONAL (CON DATA-LABEL PARA RESPONSIVE)
 // =====================================================
 function renderPersonalTable(usuarios) {
     const tbody = document.getElementById('personalTableBody');
@@ -346,18 +344,18 @@ function renderPersonalTable(usuarios) {
 
     tbody.innerHTML = usuarios.map(usuario => `
         <tr data-id="${usuario.id}">
-            <td>${usuario.id}</td>
-            <td><strong>${escapeHtml(usuario.nombre)}</strong></td>
-            <td>${escapeHtml(usuario.email || '-')}</td>
-            <td>${escapeHtml(usuario.documento || '-')}</td>
-            <td>
+            <td data-label="ID">${usuario.id}</td>
+            <td data-label="Nombre"><strong>${escapeHtml(usuario.nombre)}</strong></td>
+            <td data-label="Email">${escapeHtml(usuario.email || '-')}</td>
+            <td data-label="Documento">${escapeHtml(usuario.documento || '-')}</td>
+            <td data-label="Roles">
                 <div class="roles-badge">
                     ${usuario.roles_nombres && usuario.roles_nombres.length > 0
                         ? usuario.roles_nombres.map(rol => `<span class="role-tag ${rol.replace('_', '-')}">${formatRolName(rol)}</span>`).join('')
                         : '<span class="no-roles">Sin roles asignados</span>'}
                 </div>
             </td>
-            <td class="action-buttons">
+            <td class="action-buttons" data-label="Acciones">
                 <button class="action-btn view" onclick="verDetalleUsuario(${usuario.id})" title="Ver detalles">
                     <i class="fas fa-eye"></i>
                 </button>
@@ -384,11 +382,17 @@ function actualizarEstadisticasPersonal() {
         }
     });
 
-    document.getElementById('totalJefeOperativo').textContent = jefeOperativo;
-    document.getElementById('totalJefeTaller').textContent = jefeTaller;
-    document.getElementById('totalTecnico').textContent = tecnico;
-    document.getElementById('totalRepuestos').textContent = repuestos;
-    document.getElementById('totalPersonal').textContent = usuariosData.length;
+    const elemJO = document.getElementById('totalJefeOperativo');
+    if (elemJO) elemJO.textContent = jefeOperativo;
+
+    const elemJT = document.getElementById('totalJefeTaller');
+    if (elemJT) elemJT.textContent = jefeTaller;
+
+    const elemT = document.getElementById('totalTecnico');
+    if (elemT) elemT.textContent = tecnico;
+
+    const elemR = document.getElementById('totalRepuestos');
+    if (elemR) elemR.textContent = repuestos;
 }
 
 function filtrarPersonal() {
@@ -453,9 +457,6 @@ async function cargarClientes(pagina = 1, busqueda = '') {
                 clientesData = clientesData.concat(data.clientes);
                 renderClientesGrid(data.clientes, true);
             }
-
-            const totalClientesSpan = document.getElementById('totalClientes');
-            if (totalClientesSpan) totalClientesSpan.textContent = data.total;
         } else {
             throw new Error(data.error || 'Error cargando clientes');
         }
@@ -638,9 +639,6 @@ async function cargarVehiculos(pagina = 1, busqueda = '') {
                 vehiculosData = vehiculosData.concat(data.vehiculos);
                 renderVehiculosGrid(data.vehiculos, true);
             }
-
-            const totalV = document.getElementById('totalVehiculos');
-            if (totalV) totalV.textContent = data.total;
         } else {
             throw new Error(data.error || 'Error cargando vehículos');
         }
@@ -836,7 +834,7 @@ function cerrarModalDetalleUsuario() {
 }
 
 // =====================================================
-// VER DETALLE - CLIENTE (AHORA CON LLAMADA AL SERVIDOR)
+// VER DETALLE - CLIENTE
 // =====================================================
 async function verDetalleCliente(clienteId) {
     try {
@@ -1784,4 +1782,4 @@ window.confirmarEliminar = confirmarEliminar;
 // Auth
 window.logout = logout;
 
-console.log('✅ admin_roles.js cargado completamente (con paginación)');
+console.log('✅ admin_roles.js cargado completamente (con paginación y responsive)');

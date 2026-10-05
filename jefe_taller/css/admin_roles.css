@@ -445,16 +445,9 @@ body.sidebar-open {
     box-shadow: var(--shadow-sm);
 }
 
+/* Los badges se eliminaron del HTML, pero por si acaso se ocultan */
 .tab-btn .badge {
-    background: rgba(255, 255, 255, 0.2);
-    padding: 0.125rem 0.5rem;
-    border-radius: var(--radius-full);
-    font-size: 0.7rem;
-    font-weight: 600;
-}
-
-.tab-btn.active .badge {
-    background: rgba(255, 255, 255, 0.25);
+    display: none;
 }
 
 .tab-panel {
@@ -605,7 +598,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   TABLA DE PERSONAL
+   TABLA DE PERSONAL (DESKTOP)
    ===================================================== */
 .usuarios-card {
     background: var(--gris-card);
@@ -616,6 +609,21 @@ body.sidebar-open {
 
 .table-container {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.table-container::-webkit-scrollbar {
+    height: 6px;
+}
+
+.table-container::-webkit-scrollbar-track {
+    background: var(--gris-fondo);
+}
+
+.table-container::-webkit-scrollbar-thumb {
+    background: var(--rojo-primario);
+    border-radius: var(--radius-full);
 }
 
 .usuarios-table {
@@ -1085,7 +1093,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   BOTÓN CARGAR MÁS (NUEVO - PAGINACIÓN)
+   BOTÓN CARGAR MÁS (PAGINACIÓN)
    ===================================================== */
 .load-more-container {
     grid-column: 1 / -1;
@@ -2284,13 +2292,167 @@ body.sidebar-open {
     }
 }
 
-@media (max-width: 480px) {
-    .date-display {
+/* =====================================================
+   TABLA DE PERSONAL → TARJETAS EN MÓVIL
+   ===================================================== */
+@media (max-width: 640px) {
+
+    /* Contenedor de la tabla sin scroll */
+    .table-container {
+        overflow: visible;
+    }
+
+    /* La tabla se convierte en bloque */
+    .usuarios-table {
+        min-width: 0;
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    /* Ocultar el thead */
+    .usuarios-table thead {
         display: none;
     }
 
-    .usuarios-table th:nth-child(1),
+    /* Cada fila se convierte en una tarjeta */
+    .usuarios-table tbody,
+    .usuarios-table tr {
+        display: block;
+        width: 100%;
+    }
+
+    .usuarios-table tbody tr {
+        background: var(--gris-card);
+        border: 1px solid var(--gris-borde);
+        border-radius: var(--radius-lg);
+        margin-bottom: 1rem;
+        padding: 1rem;
+        box-shadow: var(--shadow-sm);
+        transition: var(--transition);
+        position: relative;
+    }
+
+    .usuarios-table tbody tr:hover {
+        border-color: var(--rojo-primario);
+        background: var(--gris-card);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+
+    /* Cada celda ocupa toda la fila */
+    .usuarios-table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px dashed var(--gris-borde);
+        font-size: 0.85rem;
+        text-align: right;
+        gap: 1rem;
+        word-break: break-word;
+    }
+
+    .usuarios-table td:last-child {
+        border-bottom: none;
+        margin-top: 0.5rem;
+        justify-content: flex-end;
+    }
+
+    /* Añadir etiqueta antes del valor usando data-label */
+    .usuarios-table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--gris-texto);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        text-align: left;
+        flex-shrink: 0;
+    }
+
+    /* La columna ID (oculta en móvil) */
     .usuarios-table td:nth-child(1) {
+        display: none;
+    }
+
+    /* La columna Nombre: más destacada */
+    .usuarios-table td:nth-child(2) {
+        font-size: 1rem;
+        font-weight: 700;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--gris-borde);
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+
+    .usuarios-table td:nth-child(2)::before {
+        font-size: 0.7rem;
+        color: var(--rojo-primario);
+    }
+
+    .usuarios-table td:nth-child(2) strong {
+        font-size: 1.05rem;
+    }
+
+    /* Roles: mostrar en columna */
+    .usuarios-table td:nth-child(5) {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .usuarios-table td:nth-child(5) .roles-badge {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    /* Botones de acción: alineados a la derecha */
+    .usuarios-table td.action-buttons,
+    .usuarios-table td:last-child {
+        display: flex;
+        flex-direction: row;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        padding-top: 0.75rem;
+    }
+
+    .usuarios-table td.action-buttons::before,
+    .usuarios-table td:last-child::before {
+        content: '';
+        display: none;
+    }
+
+    .usuarios-table .action-btn {
+        width: 38px;
+        height: 38px;
+        background: var(--gris-fondo);
+        border: 1px solid var(--gris-borde);
+        font-size: 0.95rem;
+    }
+
+    /* Fila de loading */
+    .usuarios-table tr.loading-row {
+        display: flex;
+        justify-content: center;
+        padding: 2rem;
+    }
+
+    .usuarios-table tr.loading-row td {
+        display: block;
+        text-align: center;
+        border: none;
+        padding: 0;
+    }
+
+    .usuarios-table tr.loading-row td::before {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .date-display {
         display: none;
     }
 

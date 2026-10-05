@@ -1,7 +1,7 @@
 # =====================================================
-# ADMINISTRACIÓN DE ROLES - JEFE DE TALLER (CORREGIDO)
+# ADMINISTRACIÓN DE ROLES - JEFE DE TALLER (OPTIMIZADO)
 # FURIA MOTOR COMPANY SRL
-# VERSIÓN: Personal + Clientes + Vehículos (CRUD completo)
+# VERSIÓN: Personal + Clientes + Vehículos con paginación
 # =====================================================
 
 from flask import Blueprint, request, jsonify, render_template
@@ -80,7 +80,7 @@ def admin_required(f):
                         break
 
             if not es_jefe_taller:
-                # También verificar por id_rol directo en usuario
+                # También verificar por rol_principal en usuario
                 user_result = supabase.table('usuario') \
                     .select('rol_principal') \
                     .eq('id', usuario_id) \
@@ -110,9 +110,7 @@ def admin_required(f):
 # =====================================================
 
 def verificar_tareas_pendientes(id_usuario, roles_a_verificar):
-    """
-    Verifica si un usuario tiene tareas pendientes para roles específicos
-    """
+    """Verifica si un usuario tiene tareas pendientes para roles específicos"""
     tareas_pendientes = []
     roles_con_tareas = []
 
@@ -209,60 +207,6 @@ def obtener_roles_usuario(id_usuario):
         return {'ids': [], 'nombres': []}
 
 
-def obtener_datos_cliente(id_cliente):
-    """
-    Obtiene los datos de un cliente (tabla cliente) + su usuario asociado.
-    Retorna un dict con:
-        {
-            'id_cliente': int,
-            'id_usuario': int,
-            'nombre': str,
-            'email': str,
-            'contacto': str,
-            'ubicacion': str
-        }
-    """
-    try:
-        cliente_result = supabase.table('cliente') \
-            .select('id, id_usuario, tipo_documento, numero_documento, email') \
-            .eq('id', id_cliente) \
-            .execute()
-
-        if not cliente_result.data:
-            return {}
-
-        c = cliente_result.data[0]
-        id_usuario = c.get('id_usuario')
-
-        info = {
-            'id_cliente': c['id'],
-            'id_usuario': id_usuario,
-            'nombre': 'Sin nombre',
-            'email': c.get('email', '') or '',
-            'contacto': '',
-            'ubicacion': ''
-        }
-
-        if id_usuario:
-            u_result = supabase.table('usuario') \
-                .select('id, nombre, email, contacto, ubicacion') \
-                .eq('id', id_usuario) \
-                .execute()
-
-            if u_result.data:
-                u = u_result.data[0]
-                info['nombre'] = u.get('nombre', 'Sin nombre')
-                info['email'] = u.get('email', '') or info['email']
-                info['contacto'] = u.get('contacto', '') or ''
-                info['ubicacion'] = u.get('ubicacion', '') or ''
-
-        return info
-
-    except Exception as e:
-        logger.error(f"Error obteniendo datos del cliente {id_cliente}: {str(e)}")
-        return {}
-
-
 def obtener_datos_usuarios_por_ids(ids_usuarios):
     """Obtiene un mapa {id_usuario: {nombre, email, contacto, ubicacion}}"""
     if not ids_usuarios:
@@ -270,7 +214,7 @@ def obtener_datos_usuarios_por_ids(ids_usuarios):
 
     try:
         result = supabase.table('usuario') \
-            .select('id, nombre, email, contacto, ubicacion') \
+            .select('id, nombre, email, contacto, ubicacion, fecha_registro') \
             .in_('id', list(set(ids_usuarios))) \
             .execute()
 
@@ -279,6 +223,42 @@ def obtener_datos_usuarios_por_ids(ids_usuarios):
     except Exception as e:
         logger.error(f"Error obteniendo usuarios: {str(e)}")
         return {}
+
+
+def construir_mapa_clientes():
+    """
+    Construye un mapa {id_cliente: {id_usuario, nombre, email, contacto, ubicacion}}
+    usando 2 queries en total (clientes + usuarios).
+    """
+    clientes_result = supabase.table('cliente') \
+        .select('id, id_usuario, tipo_documento, numero_documento, email') \
+        .execute()
+
+    if not clientes_result.data:
+        return {}
+
+    ids_usuarios = list(set([
+        c['id_usuario'] for c in clientes_result.data if c.get('id_usuario')
+    ]))
+
+    usuarios_map = obtener_datos_usuarios_por_ids(ids_usuarios) if ids_usuarios else {}
+
+    mapa = {}
+    for c in clientes_result.data:
+        u = usuarios_map.get(c.get('id_usuario'), {})
+        mapa[c['id']] = {
+            'id_cliente': c['id'],
+            'id_usuario': c.get('id_usuario'),
+            'nombre': u.get('nombre', 'Sin nombre'),
+            'email': u.get('email', '') or c.get('email', '') or '',
+            'contacto': u.get('contacto', '') or '',
+            'ubicacion': u.get('ubicacion', '') or '',
+            'numero_documento': c.get('numero_documento', '') or '',
+            'tipo_documento': c.get('tipo_documento', '') or '',
+            'fecha_registro': u.get('fecha_registro')
+        }
+
+    return mapa
 
 
 # =====================================================
@@ -297,7 +277,6 @@ def get_roles(current_user):
         if not result.data:
             return jsonify({'success': True, 'roles': []}), 200
 
-        # Filtrar roles de personal (excluir cliente)
         roles = [r for r in result.data if r['id'] != 5]
 
         return jsonify({
@@ -373,59 +352,611 @@ def get_usuarios(current_user):
         return jsonify({'error': str(e)}), 500
 
 
-@admin_roles_bp.route('/clientes', methods=['GET'])
+# =====================================================
+# CLIENTES - LISTADO PAGINADO CON BÚSQUEDA
+# =====================================================
+
+@admin_roles_bp.route('/clientes/paginado', methods=['GET'])
 @admin_required
-def get_clientes(current_user):
+def get_clientes_paginado(current_user):
     """
-    Obtener lista de clientes desde la tabla 'cliente' + 'usuario'.
-    Devuelve el id de la tabla cliente (que es el que se usa en vehiculo.id_cliente).
+    Obtener clientes paginados con búsqueda server-side.
+
+    Query params:
+        - pagina: int (default 1)
+        - por_pagina: int (default 10, max 50)
+        - busqueda: str (busca en nombre, email, contacto)
     """
     try:
-        # 1) Obtener todos los clientes de la tabla 'cliente'
-        clientes_result = supabase.table('cliente') \
-            .select('id, id_usuario, tipo_documento, numero_documento, email') \
-            .execute()
+        pagina = max(1, int(request.args.get('pagina', 1)))
+        por_pagina = min(50, max(1, int(request.args.get('por_pagina', 10))))
+        busqueda = (request.args.get('busqueda') or '').strip().lower()
 
-        if not clientes_result.data:
-            return jsonify({'success': True, 'clientes': []}), 200
+        offset = (pagina - 1) * por_pagina
 
-        # 2) Obtener usuarios asociados
-        ids_usuarios = list(set([
-            c['id_usuario'] for c in clientes_result.data if c.get('id_usuario')
-        ]))
+        # 1) Construir mapa completo de clientes (2 queries)
+        clientes_map = construir_mapa_clientes()
 
-        usuarios_map = obtener_datos_usuarios_por_ids(ids_usuarios) if ids_usuarios else {}
+        if not clientes_map:
+            return jsonify({
+                'success': True,
+                'clientes': [],
+                'total': 0,
+                'pagina': pagina,
+                'por_pagina': por_pagina,
+                'total_paginas': 0
+            }), 200
 
-        # 3) Construir lista de clientes
-        clientes = []
-        for c in clientes_result.data:
-            u = usuarios_map.get(c.get('id_usuario'), {})
+        # 2) Construir lista para filtrar
+        todos_clientes = []
+        for cid, info in clientes_map.items():
+            nombre = info.get('nombre', 'Sin nombre')
+            email = info.get('email', '')
+            contacto = info.get('contacto', '')
 
-            # Obtener vehículos de ESTE cliente (usando id de tabla cliente)
-            vehiculos_result = supabase.table('vehiculo') \
-                .select('id, placa, marca, modelo, anio, kilometraje') \
-                .eq('id_cliente', c['id']) \
+            # Aplicar filtro de búsqueda
+            if busqueda:
+                texto_busqueda = f"{nombre} {email} {contacto}".lower()
+                if busqueda not in texto_busqueda:
+                    continue
+
+            todos_clientes.append({
+                'id': cid,
+                'id_usuario': info.get('id_usuario'),
+                'nombre': nombre,
+                'email': email,
+                'contacto': contacto,
+                'ubicacion': info.get('ubicacion', ''),
+                'numero_documento': info.get('numero_documento', ''),
+                'tipo_documento': info.get('tipo_documento', ''),
+                'fecha_registro': info.get('fecha_registro'),
+                'vehiculos_count': 0
+            })
+
+        # Ordenar alfabéticamente por nombre
+        todos_clientes.sort(key=lambda x: x['nombre'].lower())
+
+        total = len(todos_clientes)
+        total_paginas = (total + por_pagina - 1) // por_pagina if total > 0 else 0
+
+        # 3) Aplicar paginación
+        clientes_paginados = todos_clientes[offset:offset + por_pagina]
+
+        # 4) Conteo de vehículos solo para la página actual (1 query)
+        if clientes_paginados:
+            ids_clientes_pagina = [c['id'] for c in clientes_paginados]
+            vehiculos_count_result = supabase.table('vehiculo') \
+                .select('id_cliente') \
+                .in_('id_cliente', ids_clientes_pagina) \
                 .execute()
 
+            conteo_vehiculos = {}
+            for v in (vehiculos_count_result.data or []):
+                cid = v['id_cliente']
+                conteo_vehiculos[cid] = conteo_vehiculos.get(cid, 0) + 1
+
+            for c in clientes_paginados:
+                c['vehiculos_count'] = conteo_vehiculos.get(c['id'], 0)
+
+        return jsonify({
+            'success': True,
+            'clientes': clientes_paginados,
+            'total': total,
+            'pagina': pagina,
+            'por_pagina': por_pagina,
+            'total_paginas': total_paginas
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error obteniendo clientes paginados: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_roles_bp.route('/clientes/todos-ligero', methods=['GET'])
+@admin_required
+def get_clientes_todos_ligero(current_user):
+    """Lista ligera de TODOS los clientes (id + nombre + email) para selects."""
+    try:
+        clientes_map = construir_mapa_clientes()
+
+        clientes = []
+        for cid, info in clientes_map.items():
             clientes.append({
-                'id': c['id'],                                # ID tabla cliente
-                'id_usuario': c.get('id_usuario'),            # ID tabla usuario
-                'nombre': u.get('nombre', 'Sin nombre'),
-                'email': u.get('email', '') or c.get('email', '') or '',
-                'contacto': u.get('contacto', '') or '',
-                'ubicacion': u.get('ubicacion', '') or '',
-                'numero_documento': c.get('numero_documento', '') or '',
-                'tipo_documento': c.get('tipo_documento', '') or '',
-                'fecha_registro': u.get('fecha_registro'),
-                'vehiculos': vehiculos_result.data or []
+                'id': cid,
+                'nombre': info.get('nombre', 'Sin nombre'),
+                'email': info.get('email', '')
             })
+
+        clientes.sort(key=lambda x: x['nombre'].lower())
 
         return jsonify({'success': True, 'clientes': clientes}), 200
 
     except Exception as e:
-        logger.error(f"Error obteniendo clientes: {str(e)}")
+        logger.error(f"Error obteniendo clientes ligeros: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
+@admin_roles_bp.route('/cliente/<int:id_cliente>/detalle', methods=['GET'])
+@admin_required
+def get_cliente_detalle(current_user, id_cliente):
+    """Obtener detalle completo de un cliente (incluye vehículos)."""
+    try:
+        cliente_result = supabase.table('cliente') \
+            .select('id, id_usuario, tipo_documento, numero_documento, email') \
+            .eq('id', id_cliente) \
+            .execute()
+
+        if not cliente_result.data:
+            return jsonify({'error': 'Cliente no encontrado'}), 404
+
+        c = cliente_result.data[0]
+        id_usuario = c.get('id_usuario')
+
+        usuario = {}
+        if id_usuario:
+            u_result = supabase.table('usuario') \
+                .select('id, nombre, email, contacto, ubicacion, fecha_registro') \
+                .eq('id', id_usuario) \
+                .execute()
+            if u_result.data:
+                usuario = u_result.data[0]
+
+        vehiculos_result = supabase.table('vehiculo') \
+            .select('id, placa, marca, modelo, anio, kilometraje') \
+            .eq('id_cliente', id_cliente) \
+            .execute()
+
+        return jsonify({
+            'success': True,
+            'cliente': {
+                'id': c['id'],
+                'id_usuario': id_usuario,
+                'nombre': usuario.get('nombre', 'Sin nombre'),
+                'email': usuario.get('email', '') or c.get('email', '') or '',
+                'contacto': usuario.get('contacto', '') or '',
+                'ubicacion': usuario.get('ubicacion', '') or '',
+                'numero_documento': c.get('numero_documento', '') or '',
+                'tipo_documento': c.get('tipo_documento', '') or '',
+                'fecha_registro': usuario.get('fecha_registro'),
+                'vehiculos': vehiculos_result.data or []
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error obteniendo detalle del cliente: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_roles_bp.route('/cliente/<int:id_cliente>', methods=['PUT'])
+@admin_required
+def editar_cliente(current_user, id_cliente):
+    """Editar datos de un cliente (tabla cliente + usuario)"""
+    try:
+        data = request.get_json()
+
+        cliente = supabase.table('cliente') \
+            .select('id, id_usuario') \
+            .eq('id', id_cliente) \
+            .execute()
+
+        if not cliente.data:
+            return jsonify({'error': 'Cliente no encontrado'}), 404
+
+        id_usuario = cliente.data[0].get('id_usuario')
+
+        # Preparar campos para tabla usuario
+        campos_usuario = ['nombre', 'email', 'contacto', 'ubicacion']
+        update_usuario = {}
+        for campo in campos_usuario:
+            if campo in data:
+                update_usuario[campo] = data[campo]
+
+        # Preparar campos para tabla cliente
+        update_cliente = {}
+        if 'email' in data:
+            update_cliente['email'] = data['email']
+        if 'numero_documento' in data:
+            update_cliente['numero_documento'] = data['numero_documento']
+        if 'tipo_documento' in data:
+            update_cliente['tipo_documento'] = data['tipo_documento']
+
+        if update_cliente:
+            supabase.table('cliente') \
+                .update(update_cliente) \
+                .eq('id', id_cliente) \
+                .execute()
+
+        if update_usuario and id_usuario:
+            supabase.table('usuario') \
+                .update(update_usuario) \
+                .eq('id', id_usuario) \
+                .execute()
+
+        logger.info(f"Cliente {id_cliente} (usuario {id_usuario}) actualizado")
+
+        return jsonify({
+            'success': True,
+            'message': 'Cliente actualizado correctamente'
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error editando cliente: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_roles_bp.route('/cliente/<int:id_cliente>', methods=['DELETE'])
+@admin_required
+def eliminar_cliente(current_user, id_cliente):
+    """Eliminar un cliente, sus vehículos y su usuario asociado."""
+    try:
+        cliente = supabase.table('cliente') \
+            .select('id, id_usuario') \
+            .eq('id', id_cliente) \
+            .execute()
+
+        if not cliente.data:
+            return jsonify({'error': 'Cliente no encontrado'}), 404
+
+        id_usuario = cliente.data[0].get('id_usuario')
+
+        # Obtener vehículos del cliente
+        vehiculos = supabase.table('vehiculo') \
+            .select('id') \
+            .eq('id_cliente', id_cliente) \
+            .execute()
+
+        vehiculos_ids = [v['id'] for v in (vehiculos.data or [])]
+
+        # Verificar órdenes activas
+        if vehiculos_ids:
+            ordenes = supabase.table('ordentrabajo') \
+                .select('id, codigo_unico, estado_global') \
+                .in_('id_vehiculo', vehiculos_ids) \
+                .execute()
+
+            estados_activos = ['EnRecepcion', 'EnDiagnostico', 'EnReparacion',
+                              'EsperandoRepuestos', 'EnArmado', 'EnControlCalidad']
+
+            ordenes_pendientes = [
+                o for o in (ordenes.data or [])
+                if o.get('estado_global') in estados_activos
+            ]
+
+            if ordenes_pendientes:
+                return jsonify({
+                    'error': f'No se puede eliminar el cliente porque tiene {len(ordenes_pendientes)} orden(es) de trabajo activa(s)',
+                    'ordenes_pendientes': ordenes_pendientes,
+                    'total': len(ordenes_pendientes)
+                }), 409
+
+        # Eliminar dependencias de órdenes
+        if vehiculos_ids:
+            for vid in vehiculos_ids:
+                ordenes_vehiculo = supabase.table('ordentrabajo') \
+                    .select('id') \
+                    .eq('id_vehiculo', vid) \
+                    .execute()
+
+                for orden in (ordenes_vehiculo.data or []):
+                    oid = orden['id']
+                    supabase.table('recepcion').delete().eq('id_orden_trabajo', oid).execute()
+                    supabase.table('seguimientoorden').delete().eq('id_orden_trabajo', oid).execute()
+                    supabase.table('planificacion').delete().eq('id_orden_trabajo', oid).execute()
+
+                supabase.table('ordentrabajo').delete().eq('id_vehiculo', vid).execute()
+
+            supabase.table('vehiculo').delete().eq('id_cliente', id_cliente).execute()
+
+        # Eliminar reservas asociadas al usuario
+        if id_usuario:
+            try:
+                supabase.table('solicitud_reserva_cliente') \
+                    .delete().eq('id_cliente', id_usuario).execute()
+            except Exception as ex:
+                logger.warning(f"No se pudieron eliminar reservas del usuario {id_usuario}: {str(ex)}")
+
+        # Eliminar de tabla cliente
+        supabase.table('cliente').delete().eq('id', id_cliente).execute()
+
+        # Eliminar usuario
+        if id_usuario:
+            supabase.table('usuario').delete().eq('id', id_usuario).execute()
+
+        logger.info(f"Cliente {id_cliente} (usuario {id_usuario}) eliminado con {len(vehiculos_ids)} vehículo(s)")
+
+        return jsonify({
+            'success': True,
+            'message': 'Cliente eliminado correctamente'
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error eliminando cliente: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# VEHÍCULOS - LISTADO PAGINADO CON BÚSQUEDA
+# =====================================================
+
+@admin_roles_bp.route('/vehiculos/paginado', methods=['GET'])
+@admin_required
+def get_vehiculos_paginado(current_user):
+    """
+    Obtener vehículos paginados con búsqueda server-side.
+
+    Query params:
+        - pagina: int (default 1)
+        - por_pagina: int (default 10, max 50)
+        - busqueda: str (busca en placa, marca, modelo, nombre cliente)
+    """
+    try:
+        pagina = max(1, int(request.args.get('pagina', 1)))
+        por_pagina = min(50, max(1, int(request.args.get('por_pagina', 10))))
+        busqueda = (request.args.get('busqueda') or '').strip().lower()
+
+        offset = (pagina - 1) * por_pagina
+
+        # 1) Obtener todos los vehículos (1 query)
+        vehiculos_result = supabase.table('vehiculo') \
+            .select('id, id_cliente, placa, marca, modelo, anio, kilometraje') \
+            .order('id', desc=True) \
+            .execute()
+
+        if not vehiculos_result.data:
+            return jsonify({
+                'success': True,
+                'vehiculos': [],
+                'total': 0,
+                'pagina': pagina,
+                'por_pagina': por_pagina,
+                'total_paginas': 0
+            }), 200
+
+        # 2) Construir mapa de clientes (2 queries)
+        clientes_map = construir_mapa_clientes()
+
+        # 3) Construir lista completa con filtro de búsqueda
+        todos_vehiculos = []
+        for v in vehiculos_result.data:
+            cliente_info = clientes_map.get(v.get('id_cliente'), {})
+            nombre_cliente = cliente_info.get('nombre', 'Sin cliente')
+
+            if busqueda:
+                placa = (v.get('placa') or '').lower()
+                marca = (v.get('marca') or '').lower()
+                modelo = (v.get('modelo') or '').lower()
+                nombre_lower = nombre_cliente.lower()
+
+                if not (busqueda in placa or busqueda in marca or
+                        busqueda in modelo or busqueda in nombre_lower):
+                    continue
+
+            todos_vehiculos.append({
+                'id': v['id'],
+                'id_cliente': v.get('id_cliente'),
+                'placa': v.get('placa', ''),
+                'marca': v.get('marca', ''),
+                'modelo': v.get('modelo', ''),
+                'anio': v.get('anio'),
+                'kilometraje': v.get('kilometraje', 0),
+                'cliente_nombre': nombre_cliente,
+                'cliente_email': cliente_info.get('email', ''),
+                'cliente_contacto': cliente_info.get('contacto', ''),
+                'total_ordenes': 0
+            })
+
+        total = len(todos_vehiculos)
+        total_paginas = (total + por_pagina - 1) // por_pagina if total > 0 else 0
+
+        # 4) Aplicar paginación
+        vehiculos_paginados = todos_vehiculos[offset:offset + por_pagina]
+
+        # 5) Conteo de órdenes solo para esta página (1 query)
+        if vehiculos_paginados:
+            ids_vehiculos_pagina = [v['id'] for v in vehiculos_paginados]
+            ordenes_result = supabase.table('ordentrabajo') \
+                .select('id_vehiculo') \
+                .in_('id_vehiculo', ids_vehiculos_pagina) \
+                .execute()
+
+            conteo_ordenes = {}
+            for o in (ordenes_result.data or []):
+                vid = o['id_vehiculo']
+                conteo_ordenes[vid] = conteo_ordenes.get(vid, 0) + 1
+
+            for v in vehiculos_paginados:
+                v['total_ordenes'] = conteo_ordenes.get(v['id'], 0)
+
+        return jsonify({
+            'success': True,
+            'vehiculos': vehiculos_paginados,
+            'total': total,
+            'pagina': pagina,
+            'por_pagina': por_pagina,
+            'total_paginas': total_paginas
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error obteniendo vehículos paginados: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_roles_bp.route('/vehiculo/<int:id_vehiculo>', methods=['GET'])
+@admin_required
+def get_vehiculo_detalle(current_user, id_vehiculo):
+    """Obtener detalle completo de un vehículo"""
+    try:
+        vehiculo = supabase.table('vehiculo') \
+            .select('id, id_cliente, placa, marca, modelo, anio, kilometraje') \
+            .eq('id', id_vehiculo) \
+            .execute()
+
+        if not vehiculo.data:
+            return jsonify({'error': 'Vehículo no encontrado'}), 404
+
+        v = vehiculo.data[0]
+
+        # Obtener datos del cliente
+        cliente_info = {}
+        if v.get('id_cliente'):
+            clientes_map = construir_mapa_clientes()
+            cliente_info = clientes_map.get(v['id_cliente'], {})
+
+        # Obtener historial de órdenes
+        ordenes = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_salida') \
+            .eq('id_vehiculo', id_vehiculo) \
+            .order('fecha_ingreso', desc=True) \
+            .execute()
+
+        return jsonify({
+            'success': True,
+            'vehiculo': {
+                'id': v['id'],
+                'id_cliente': v.get('id_cliente'),
+                'placa': v.get('placa', ''),
+                'marca': v.get('marca', ''),
+                'modelo': v.get('modelo', ''),
+                'anio': v.get('anio'),
+                'kilometraje': v.get('kilometraje', 0),
+                'cliente': cliente_info,
+                'ordenes': ordenes.data or []
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error obteniendo detalle del vehículo: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_roles_bp.route('/vehiculo/<int:id_vehiculo>', methods=['PUT'])
+@admin_required
+def editar_vehiculo(current_user, id_vehiculo):
+    """Editar datos de un vehículo"""
+    try:
+        data = request.get_json()
+
+        vehiculo = supabase.table('vehiculo') \
+            .select('id, placa') \
+            .eq('id', id_vehiculo) \
+            .execute()
+
+        if not vehiculo.data:
+            return jsonify({'error': 'Vehículo no encontrado'}), 404
+
+        campos_permitidos = ['placa', 'marca', 'modelo', 'anio', 'kilometraje', 'id_cliente']
+        update_data = {}
+
+        for campo in campos_permitidos:
+            if campo in data:
+                update_data[campo] = data[campo]
+
+        if not update_data:
+            return jsonify({'error': 'No hay campos para actualizar'}), 400
+
+        # Validar placa duplicada
+        if 'placa' in update_data:
+            placa_existente = supabase.table('vehiculo') \
+                .select('id') \
+                .eq('placa', update_data['placa']) \
+                .neq('id', id_vehiculo) \
+                .execute()
+
+            if placa_existente.data:
+                return jsonify({'error': f'Ya existe un vehículo con la placa {update_data["placa"]}'}), 409
+
+        # Validar cliente existente
+        if 'id_cliente' in update_data:
+            cliente_existe = supabase.table('cliente') \
+                .select('id') \
+                .eq('id', update_data['id_cliente']) \
+                .execute()
+
+            if not cliente_existe.data:
+                return jsonify({'error': 'El cliente especificado no existe'}), 404
+
+        resultado = supabase.table('vehiculo') \
+            .update(update_data) \
+            .eq('id', id_vehiculo) \
+            .execute()
+
+        logger.info(f"Vehículo {id_vehiculo} actualizado: {list(update_data.keys())}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Vehículo actualizado correctamente',
+            'vehiculo': resultado.data[0] if resultado.data else None
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error editando vehículo: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_roles_bp.route('/vehiculo/<int:id_vehiculo>', methods=['DELETE'])
+@admin_required
+def eliminar_vehiculo(current_user, id_vehiculo):
+    """Eliminar un vehículo (solo si no tiene órdenes activas)"""
+    try:
+        vehiculo = supabase.table('vehiculo') \
+            .select('id, placa, marca, modelo') \
+            .eq('id', id_vehiculo) \
+            .execute()
+
+        if not vehiculo.data:
+            return jsonify({'error': 'Vehículo no encontrado'}), 404
+
+        v = vehiculo.data[0]
+
+        ordenes = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, estado_global') \
+            .eq('id_vehiculo', id_vehiculo) \
+            .execute()
+
+        estados_activos = ['EnRecepcion', 'EnDiagnostico', 'EnReparacion',
+                          'EsperandoRepuestos', 'EnArmado', 'EnControlCalidad']
+
+        ordenes_pendientes = [
+            o for o in (ordenes.data or [])
+            if o.get('estado_global') in estados_activos
+        ]
+
+        if ordenes_pendientes:
+            return jsonify({
+                'error': f'No se puede eliminar el vehículo porque tiene {len(ordenes_pendientes)} orden(es) de trabajo activa(s)',
+                'ordenes_pendientes': ordenes_pendientes
+            }), 409
+
+        for orden in (ordenes.data or []):
+            oid = orden['id']
+            supabase.table('recepcion').delete().eq('id_orden_trabajo', oid).execute()
+            supabase.table('seguimientoorden').delete().eq('id_orden_trabajo', oid).execute()
+            supabase.table('planificacion').delete().eq('id_orden_trabajo', oid).execute()
+
+        supabase.table('ordentrabajo').delete().eq('id_vehiculo', id_vehiculo).execute()
+
+        try:
+            supabase.table('solicitud_reserva_cliente').delete().eq('id_vehiculo', id_vehiculo).execute()
+        except Exception as ex:
+            logger.warning(f"No se pudieron eliminar reservas del vehículo {id_vehiculo}: {str(ex)}")
+
+        supabase.table('vehiculo').delete().eq('id', id_vehiculo).execute()
+
+        logger.info(f"Vehículo {v['placa']} (ID: {id_vehiculo}) eliminado")
+
+        return jsonify({
+            'success': True,
+            'message': f'Vehículo {v["placa"]} eliminado correctamente'
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error eliminando vehículo: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# DETALLE USUARIO
+# =====================================================
 
 @admin_roles_bp.route('/usuario/<int:id_usuario>', methods=['GET'])
 @admin_required
@@ -478,6 +1009,10 @@ def get_usuario_detalle(current_user, id_usuario):
         return jsonify({'error': str(e)}), 500
 
 
+# =====================================================
+# ROLES DE USUARIO
+# =====================================================
+
 @admin_roles_bp.route('/usuario/<int:id_usuario>/roles', methods=['PUT'])
 @admin_required
 def asignar_roles_usuario(current_user, id_usuario):
@@ -500,7 +1035,6 @@ def asignar_roles_usuario(current_user, id_usuario):
             if rol_id in roles_eliminados_ids:
                 roles_criticos_a_quitar.append(nombre_rol)
 
-        # Si no se quitan roles críticos, continuar normalmente
         if not roles_criticos_a_quitar:
             supabase.table('usuario_rol').delete() \
                 .eq('id_usuario', id_usuario) \
@@ -516,7 +1050,6 @@ def asignar_roles_usuario(current_user, id_usuario):
             logger.info(f"Roles actualizados para usuario {id_usuario}: {nuevos_roles_ids}")
             return jsonify({'success': True, 'message': 'Roles asignados correctamente'}), 200
 
-        # Verificar tareas pendientes antes de quitar roles críticos
         verificacion = verificar_tareas_pendientes(id_usuario, roles_criticos_a_quitar)
 
         if verificacion['tiene_pendientes']:
@@ -526,8 +1059,6 @@ def asignar_roles_usuario(current_user, id_usuario):
             if 'encargado_repuestos' in roles_criticos_a_quitar:
                 nombres_roles_quitando.append("Encargado de Repuestos")
 
-            logger.warning(f"Intento denegado: No se pueden quitar roles {nombres_roles_quitando} al usuario {id_usuario}")
-
             return jsonify({
                 'error': f'No se puede quitar el rol de {", ".join(nombres_roles_quitando)} porque el usuario tiene tareas pendientes',
                 'tareas_pendientes': verificacion['tareas'],
@@ -535,7 +1066,6 @@ def asignar_roles_usuario(current_user, id_usuario):
                 'roles_afectados': roles_criticos_a_quitar
             }), 409
 
-        # Proceder con la actualización
         supabase.table('usuario_rol').delete() \
             .eq('id_usuario', id_usuario) \
             .execute()
@@ -608,6 +1138,10 @@ def eliminar_usuario(current_user, id_usuario):
         return jsonify({'error': str(e)}), 500
 
 
+# =====================================================
+# ESTADÍSTICAS
+# =====================================================
+
 @admin_roles_bp.route('/estadisticas', methods=['GET'])
 @admin_required
 def get_estadisticas(current_user):
@@ -637,17 +1171,24 @@ def get_estadisticas(current_user):
                     'cantidad': count.count if count.count else 0
                 })
 
-        # Contar clientes reales desde la tabla 'cliente'
+        # Contar clientes desde tabla cliente
         clientes_result = supabase.table('cliente') \
             .select('id', count='exact') \
             .execute()
         total_clientes = clientes_result.count if clientes_result.count else 0
+
+        # Contar vehículos desde tabla vehiculo
+        vehiculos_result = supabase.table('vehiculo') \
+            .select('id', count='exact') \
+            .execute()
+        total_vehiculos = vehiculos_result.count if vehiculos_result.count else 0
 
         return jsonify({
             'success': True,
             'estadisticas': {
                 'total_usuarios': total_personal,
                 'total_clientes': total_clientes,
+                'total_vehiculos': total_vehiculos,
                 'usuarios_por_rol': usuarios_por_rol
             }
         }), 200
@@ -656,6 +1197,10 @@ def get_estadisticas(current_user):
         logger.error(f"Error obteniendo estadísticas: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
+# =====================================================
+# ASIGNACIONES Y REASIGNACIÓN
+# =====================================================
 
 @admin_roles_bp.route('/tecnico/<int:id_tecnico>/ordenes-activas', methods=['GET'])
 @admin_required
@@ -700,7 +1245,6 @@ def get_asignaciones_activas(current_user, id_usuario):
 
         asignaciones = []
 
-        # Para técnicos
         if 'tecnico' in roles_nombres:
             asignaciones_tecnicas = supabase.table('asignaciontecnico') \
                 .select('''
@@ -725,7 +1269,6 @@ def get_asignaciones_activas(current_user, id_usuario):
                     'fecha_inicio': a.get('fecha_hora_inicio')
                 })
 
-        # Para encargado de repuestos
         if 'encargado_repuestos' in roles_nombres:
             solicitudes = supabase.table('solicitud_cotizacion_repuesto') \
                 .select('''
@@ -804,427 +1347,6 @@ def reasignar_tareas(current_user, id_usuario):
 
     except Exception as e:
         logger.error(f"Error reasignando tareas: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-# =====================================================
-# CRUD DE CLIENTES (EDITAR / ELIMINAR)
-# =====================================================
-
-@admin_roles_bp.route('/cliente/<int:id_cliente>', methods=['PUT'])
-@admin_required
-def editar_cliente(current_user, id_cliente):
-    """
-    Editar datos de un cliente.
-    - Actualiza la tabla 'cliente' (email)
-    - Actualiza la tabla 'usuario' asociada (nombre, email, contacto, ubicacion)
-    """
-    try:
-        data = request.get_json()
-
-        # Verificar que el cliente existe
-        cliente = supabase.table('cliente') \
-            .select('id, id_usuario') \
-            .eq('id', id_cliente) \
-            .execute()
-
-        if not cliente.data:
-            return jsonify({'error': 'Cliente no encontrado'}), 404
-
-        id_usuario = cliente.data[0].get('id_usuario')
-
-        # Preparar campos para tabla usuario
-        campos_usuario = ['nombre', 'email', 'contacto', 'ubicacion']
-        update_usuario = {}
-        for campo in campos_usuario:
-            if campo in data:
-                update_usuario[campo] = data[campo]
-
-        # Preparar campos para tabla cliente
-        update_cliente = {}
-        if 'email' in data:
-            update_cliente['email'] = data['email']
-        if 'numero_documento' in data:
-            update_cliente['numero_documento'] = data['numero_documento']
-        if 'tipo_documento' in data:
-            update_cliente['tipo_documento'] = data['tipo_documento']
-
-        # Actualizar tabla cliente
-        if update_cliente:
-            supabase.table('cliente') \
-                .update(update_cliente) \
-                .eq('id', id_cliente) \
-                .execute()
-
-        # Actualizar tabla usuario
-        if update_usuario and id_usuario:
-            supabase.table('usuario') \
-                .update(update_usuario) \
-                .eq('id', id_usuario) \
-                .execute()
-
-        logger.info(f"Cliente {id_cliente} (usuario {id_usuario}) actualizado")
-
-        return jsonify({
-            'success': True,
-            'message': 'Cliente actualizado correctamente'
-        }), 200
-
-    except Exception as e:
-        logger.error(f"Error editando cliente: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@admin_roles_bp.route('/cliente/<int:id_cliente>', methods=['DELETE'])
-@admin_required
-def eliminar_cliente(current_user, id_cliente):
-    """
-    Eliminar un cliente, sus vehículos y su usuario asociado.
-    """
-    try:
-        # Verificar que el cliente existe
-        cliente = supabase.table('cliente') \
-            .select('id, id_usuario') \
-            .eq('id', id_cliente) \
-            .execute()
-
-        if not cliente.data:
-            return jsonify({'error': 'Cliente no encontrado'}), 404
-
-        id_usuario = cliente.data[0].get('id_usuario')
-
-        # Obtener vehículos del cliente
-        vehiculos = supabase.table('vehiculo') \
-            .select('id') \
-            .eq('id_cliente', id_cliente) \
-            .execute()
-
-        vehiculos_ids = [v['id'] for v in (vehiculos.data or [])]
-
-        # Verificar órdenes activas
-        if vehiculos_ids:
-            ordenes = supabase.table('ordentrabajo') \
-                .select('id, codigo_unico, estado_global') \
-                .in_('id_vehiculo', vehiculos_ids) \
-                .execute()
-
-            estados_activos = ['EnRecepcion', 'EnDiagnostico', 'EnReparacion',
-                              'EsperandoRepuestos', 'EnArmado', 'EnControlCalidad']
-
-            ordenes_pendientes = [
-                o for o in (ordenes.data or [])
-                if o.get('estado_global') in estados_activos
-            ]
-
-            if ordenes_pendientes:
-                return jsonify({
-                    'error': f'No se puede eliminar el cliente porque tiene {len(ordenes_pendientes)} orden(es) de trabajo activa(s)',
-                    'ordenes_pendientes': ordenes_pendientes,
-                    'total': len(ordenes_pendientes)
-                }), 409
-
-        # Eliminar dependencias de órdenes
-        if vehiculos_ids:
-            for vid in vehiculos_ids:
-                ordenes_vehiculo = supabase.table('ordentrabajo') \
-                    .select('id') \
-                    .eq('id_vehiculo', vid) \
-                    .execute()
-
-                for orden in (ordenes_vehiculo.data or []):
-                    oid = orden['id']
-                    supabase.table('recepcion').delete().eq('id_orden_trabajo', oid).execute()
-                    supabase.table('seguimientoorden').delete().eq('id_orden_trabajo', oid).execute()
-                    supabase.table('planificacion').delete().eq('id_orden_trabajo', oid).execute()
-
-                supabase.table('ordentrabajo').delete().eq('id_vehiculo', vid).execute()
-
-            # Eliminar vehículos
-            supabase.table('vehiculo').delete().eq('id_cliente', id_cliente).execute()
-
-        # Eliminar reservas asociadas al cliente
-        if id_usuario:
-            try:
-                supabase.table('solicitud_reserva_cliente') \
-                    .delete().eq('id_cliente', id_usuario).execute()
-            except Exception as ex:
-                logger.warning(f"No se pudieron eliminar reservas del usuario {id_usuario}: {str(ex)}")
-
-        # Eliminar de tabla cliente
-        supabase.table('cliente').delete().eq('id', id_cliente).execute()
-
-        # Eliminar usuario
-        if id_usuario:
-            supabase.table('usuario').delete().eq('id', id_usuario).execute()
-
-        logger.info(f"Cliente {id_cliente} (usuario {id_usuario}) eliminado con {len(vehiculos_ids)} vehículo(s)")
-
-        return jsonify({
-            'success': True,
-            'message': 'Cliente eliminado correctamente'
-        }), 200
-
-    except Exception as e:
-        logger.error(f"Error eliminando cliente: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-# =====================================================
-# CRUD DE VEHÍCULOS (CORREGIDO - SIN JOIN AUTOMÁTICO)
-# =====================================================
-
-@admin_roles_bp.route('/vehiculos', methods=['GET'])
-@admin_required
-def get_vehiculos(current_user):
-    """
-    Obtener lista de todos los vehículos.
-    Como 'vehiculo.id_cliente' apunta a 'cliente.id', hacemos las
-    consultas por separado y unimos en Python.
-    """
-    try:
-        # 1) Obtener todos los vehículos
-        vehiculos_result = supabase.table('vehiculo') \
-            .select('id, id_cliente, placa, marca, modelo, anio, kilometraje') \
-            .order('id', desc=True) \
-            .execute()
-
-        if not vehiculos_result.data:
-            return jsonify({'success': True, 'vehiculos': []}), 200
-
-        # 2) Obtener clientes únicos
-        ids_clientes = list(set([
-            v['id_cliente'] for v in vehiculos_result.data if v.get('id_cliente')
-        ]))
-
-        clientes_map = {}
-        if ids_clientes:
-            clientes_result = supabase.table('cliente') \
-                .select('id, id_usuario') \
-                .in_('id', ids_clientes) \
-                .execute()
-
-            ids_usuarios = list(set([
-                c['id_usuario'] for c in (clientes_result.data or []) if c.get('id_usuario')
-            ]))
-
-            usuarios_map = obtener_datos_usuarios_por_ids(ids_usuarios) if ids_usuarios else {}
-
-            for c in (clientes_result.data or []):
-                u = usuarios_map.get(c.get('id_usuario'), {})
-                clientes_map[c['id']] = {
-                    'id_cliente': c['id'],
-                    'id_usuario': c.get('id_usuario'),
-                    'nombre': u.get('nombre', 'Sin nombre'),
-                    'email': u.get('email', '') or '',
-                    'contacto': u.get('contacto', '') or '',
-                    'ubicacion': u.get('ubicacion', '') or ''
-                }
-
-        # 3) Construir respuesta con conteo de órdenes
-        vehiculos_con_stats = []
-        for v in vehiculos_result.data:
-            ordenes_count = supabase.table('ordentrabajo') \
-                .select('id', count='exact') \
-                .eq('id_vehiculo', v['id']) \
-                .execute()
-
-            cliente_info = clientes_map.get(v.get('id_cliente'), {})
-
-            vehiculos_con_stats.append({
-                'id': v['id'],
-                'id_cliente': v.get('id_cliente'),
-                'placa': v.get('placa', ''),
-                'marca': v.get('marca', ''),
-                'modelo': v.get('modelo', ''),
-                'anio': v.get('anio'),
-                'kilometraje': v.get('kilometraje', 0),
-                'cliente_nombre': cliente_info.get('nombre', 'Sin cliente'),
-                'cliente_email': cliente_info.get('email', ''),
-                'cliente_contacto': cliente_info.get('contacto', ''),
-                'total_ordenes': ordenes_count.count if ordenes_count.count else 0
-            })
-
-        return jsonify({'success': True, 'vehiculos': vehiculos_con_stats}), 200
-
-    except Exception as e:
-        logger.error(f"Error obteniendo vehículos: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@admin_roles_bp.route('/vehiculo/<int:id_vehiculo>', methods=['GET'])
-@admin_required
-def get_vehiculo_detalle(current_user, id_vehiculo):
-    """Obtener detalle completo de un vehículo"""
-    try:
-        vehiculo = supabase.table('vehiculo') \
-            .select('id, id_cliente, placa, marca, modelo, anio, kilometraje') \
-            .eq('id', id_vehiculo) \
-            .execute()
-
-        if not vehiculo.data:
-            return jsonify({'error': 'Vehículo no encontrado'}), 404
-
-        v = vehiculo.data[0]
-
-        # Obtener datos del cliente
-        cliente_info = {}
-        if v.get('id_cliente'):
-            cliente_info = obtener_datos_cliente(v['id_cliente'])
-
-        # Obtener historial de órdenes
-        ordenes = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_salida') \
-            .eq('id_vehiculo', id_vehiculo) \
-            .order('fecha_ingreso', desc=True) \
-            .execute()
-
-        return jsonify({
-            'success': True,
-            'vehiculo': {
-                'id': v['id'],
-                'id_cliente': v.get('id_cliente'),
-                'placa': v.get('placa', ''),
-                'marca': v.get('marca', ''),
-                'modelo': v.get('modelo', ''),
-                'anio': v.get('anio'),
-                'kilometraje': v.get('kilometraje', 0),
-                'cliente': cliente_info,
-                'ordenes': ordenes.data or []
-            }
-        }), 200
-
-    except Exception as e:
-        logger.error(f"Error obteniendo detalle del vehículo: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@admin_roles_bp.route('/vehiculo/<int:id_vehiculo>', methods=['PUT'])
-@admin_required
-def editar_vehiculo(current_user, id_vehiculo):
-    """Editar datos de un vehículo"""
-    try:
-        data = request.get_json()
-
-        vehiculo = supabase.table('vehiculo') \
-            .select('id, placa') \
-            .eq('id', id_vehiculo) \
-            .execute()
-
-        if not vehiculo.data:
-            return jsonify({'error': 'Vehículo no encontrado'}), 404
-
-        campos_permitidos = ['placa', 'marca', 'modelo', 'anio', 'kilometraje', 'id_cliente']
-        update_data = {}
-
-        for campo in campos_permitidos:
-            if campo in data:
-                update_data[campo] = data[campo]
-
-        if not update_data:
-            return jsonify({'error': 'No hay campos para actualizar'}), 400
-
-        # Validar placa duplicada
-        if 'placa' in update_data:
-            placa_existente = supabase.table('vehiculo') \
-                .select('id') \
-                .eq('placa', update_data['placa']) \
-                .neq('id', id_vehiculo) \
-                .execute()
-
-            if placa_existente.data:
-                return jsonify({'error': f'Ya existe un vehículo con la placa {update_data["placa"]}'}), 409
-
-        # Validar cliente existente (tabla cliente)
-        if 'id_cliente' in update_data:
-            cliente_existe = supabase.table('cliente') \
-                .select('id') \
-                .eq('id', update_data['id_cliente']) \
-                .execute()
-
-            if not cliente_existe.data:
-                return jsonify({'error': 'El cliente especificado no existe'}), 404
-
-        resultado = supabase.table('vehiculo') \
-            .update(update_data) \
-            .eq('id', id_vehiculo) \
-            .execute()
-
-        logger.info(f"Vehículo {id_vehiculo} actualizado: {list(update_data.keys())}")
-
-        return jsonify({
-            'success': True,
-            'message': 'Vehículo actualizado correctamente',
-            'vehiculo': resultado.data[0] if resultado.data else None
-        }), 200
-
-    except Exception as e:
-        logger.error(f"Error editando vehículo: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@admin_roles_bp.route('/vehiculo/<int:id_vehiculo>', methods=['DELETE'])
-@admin_required
-def eliminar_vehiculo(current_user, id_vehiculo):
-    """Eliminar un vehículo (solo si no tiene órdenes activas)"""
-    try:
-        vehiculo = supabase.table('vehiculo') \
-            .select('id, placa, marca, modelo') \
-            .eq('id', id_vehiculo) \
-            .execute()
-
-        if not vehiculo.data:
-            return jsonify({'error': 'Vehículo no encontrado'}), 404
-
-        v = vehiculo.data[0]
-
-        # Verificar órdenes activas
-        ordenes = supabase.table('ordentrabajo') \
-            .select('id, codigo_unico, estado_global') \
-            .eq('id_vehiculo', id_vehiculo) \
-            .execute()
-
-        estados_activos = ['EnRecepcion', 'EnDiagnostico', 'EnReparacion',
-                          'EsperandoRepuestos', 'EnArmado', 'EnControlCalidad']
-
-        ordenes_pendientes = [
-            o for o in (ordenes.data or [])
-            if o.get('estado_global') in estados_activos
-        ]
-
-        if ordenes_pendientes:
-            return jsonify({
-                'error': f'No se puede eliminar el vehículo porque tiene {len(ordenes_pendientes)} orden(es) de trabajo activa(s)',
-                'ordenes_pendientes': ordenes_pendientes
-            }), 409
-
-        # Eliminar dependencias de órdenes finalizadas
-        for orden in (ordenes.data or []):
-            oid = orden['id']
-            supabase.table('recepcion').delete().eq('id_orden_trabajo', oid).execute()
-            supabase.table('seguimientoorden').delete().eq('id_orden_trabajo', oid).execute()
-            supabase.table('planificacion').delete().eq('id_orden_trabajo', oid).execute()
-
-        # Eliminar órdenes finalizadas
-        supabase.table('ordentrabajo').delete().eq('id_vehiculo', id_vehiculo).execute()
-
-        # Eliminar reservas asociadas
-        try:
-            supabase.table('solicitud_reserva_cliente').delete().eq('id_vehiculo', id_vehiculo).execute()
-        except Exception as ex:
-            logger.warning(f"No se pudieron eliminar reservas del vehículo {id_vehiculo}: {str(ex)}")
-
-        # Eliminar vehículo
-        supabase.table('vehiculo').delete().eq('id', id_vehiculo).execute()
-
-        logger.info(f"Vehículo {v['placa']} (ID: {id_vehiculo}) eliminado")
-
-        return jsonify({
-            'success': True,
-            'message': f'Vehículo {v["placa"]} eliminado correctamente'
-        }), 200
-
-    except Exception as e:
-        logger.error(f"Error eliminando vehículo: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

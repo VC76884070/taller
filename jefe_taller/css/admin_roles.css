@@ -1,7 +1,7 @@
 /* =====================================================
    ADMINISTRACIÓN DE ROLES - ESTILOS COMPLETOS
    FURIA MOTOR COMPANY SRL
-   VERSIÓN: Personal + Clientes + Vehículos
+   VERSIÓN: Personal + Clientes + Vehículos (con paginación)
    ===================================================== */
 
 /* =====================================================
@@ -577,6 +577,13 @@ body.sidebar-open {
     gap: 0.5rem;
     border: 1px solid var(--gris-borde);
     min-width: 260px;
+    position: relative;
+    transition: var(--transition);
+}
+
+.search-box:focus-within {
+    border-color: var(--rojo-primario);
+    box-shadow: 0 0 0 2px var(--rojo-suave);
 }
 
 .search-box i {
@@ -936,7 +943,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   VEHÍCULOS GRID (NUEVO)
+   VEHÍCULOS GRID
    ===================================================== */
 .vehiculos-grid {
     display: grid;
@@ -1075,6 +1082,48 @@ body.sidebar-open {
     background: var(--rojo-primario);
     color: white;
     border-color: var(--rojo-primario);
+}
+
+/* =====================================================
+   BOTÓN CARGAR MÁS (NUEVO - PAGINACIÓN)
+   ===================================================== */
+.load-more-container {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    padding: 1.5rem 0;
+}
+
+.btn-load-more {
+    background: var(--gris-card);
+    border: 1px solid var(--gris-borde);
+    color: var(--blanco-texto);
+    padding: 0.75rem 2rem;
+    border-radius: var(--radius-full);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: inherit;
+}
+
+.btn-load-more:hover {
+    background: var(--rojo-primario);
+    border-color: var(--rojo-primario);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-load-more:active {
+    transform: translateY(0);
+}
+
+.btn-load-more i {
+    font-size: 0.75rem;
 }
 
 /* =====================================================
@@ -1283,7 +1332,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   DETALLE DE VEHÍCULO (NUEVO)
+   DETALLE DE VEHÍCULO
    ===================================================== */
 .detalle-vehiculo {
     display: flex;
@@ -1487,7 +1536,7 @@ body.sidebar-open {
 }
 
 /* =====================================================
-   FORMULARIOS EN MODALES (NUEVO)
+   FORMULARIOS EN MODALES
    ===================================================== */
 .form-group {
     margin-bottom: 1rem;

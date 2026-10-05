@@ -1,11 +1,11 @@
 // =====================================================
-// ADMINISTRACIÓN DE ROLES - JEFE TALLER (COMPLETO)
+// ADMINISTRACIÓN DE ROLES - JEFE TALLER (OPTIMIZADO)
 // FURIA MOTOR COMPANY SRL
-// VERSIÓN: Personal + Clientes + Vehículos (CRUD completo)
+// VERSIÓN: Personal + Clientes + Vehículos con paginación
 // =====================================================
 
 // =====================================================
-// CONFIGURACIÓN DE API - USA VARIABLE GLOBAL
+// CONFIGURACIÓN DE API
 // =====================================================
 if (typeof window.API_BASE_URL === 'undefined') {
     window.API_BASE_URL = (() => {
@@ -20,7 +20,6 @@ if (typeof window.API_BASE_URL === 'undefined') {
     })();
 }
 
-// Endpoint correcto para jefe-taller
 const API_URL = `${window.API_BASE_URL}/api/jefe-taller`;
 
 // =====================================================
@@ -28,16 +27,35 @@ const API_URL = `${window.API_BASE_URL}/api/jefe-taller`;
 // =====================================================
 let usuariosData = [];
 let clientesData = [];
-let vehiculosData = [];        // NUEVO
+let vehiculosData = [];
 let rolesData = [];
 let usuarioSeleccionado = null;
 let currentUserRoles = [];
 let currentUserInfo = null;
 let asignacionesActivas = [];
 let personalDisponible = [];
-let accionEliminarPendiente = null;   // NUEVO
+let accionEliminarPendiente = null;
 
-// IDs de roles críticos (deben coincidir con los del backend)
+// Estado de paginación
+let clientesPaginacion = {
+    pagina: 1,
+    porPagina: 10,
+    total: 0,
+    totalPaginas: 0,
+    busqueda: '',
+    timerBusqueda: null
+};
+
+let vehiculosPaginacion = {
+    pagina: 1,
+    porPagina: 10,
+    total: 0,
+    totalPaginas: 0,
+    busqueda: '',
+    timerBusqueda: null
+};
+
+// IDs de roles críticos
 const ROLES_CRITICOS = {
     tecnico: 3,
     encargado_repuestos: 4
@@ -56,8 +74,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     initPage();
     await cargarRoles();
     await cargarUsuarios();
-    await cargarClientes();
-    await cargarVehiculos();       // NUEVO
+    await cargarClientes(1, '');
+    await cargarVehiculos(1, '');
     await cargarEstadisticas();
     setupEventListeners();
 
@@ -133,7 +151,7 @@ function setupEventListeners() {
         searchClientes.addEventListener('input', () => filtrarClientes());
     }
 
-    // Filtro vehículos (NUEVO)
+    // Filtro vehículos
     const searchVehiculos = document.getElementById('searchVehiculos');
     if (searchVehiculos) {
         searchVehiculos.addEventListener('input', () => filtrarVehiculos());
@@ -218,67 +236,6 @@ async function cargarUsuarios() {
     }
 }
 
-async function cargarClientes() {
-    try {
-        const response = await fetch(`${API_URL}/clientes`, { headers: getAuthHeaders() });
-        if (response.status === 401) { logout(); return; }
-
-        const data = await response.json();
-        if (response.ok && data.success) {
-            clientesData = data.clientes;
-            console.log('✅ Clientes cargados:', clientesData.length);
-            renderClientesGrid(clientesData);
-            const totalClientesSpan = document.getElementById('totalClientes');
-            if (totalClientesSpan) totalClientesSpan.textContent = clientesData.length;
-        } else {
-            throw new Error(data.error || 'Error cargando clientes');
-        }
-    } catch (error) {
-        console.error('Error cargando clientes:', error);
-        mostrarNotificacion('Error al cargar los clientes', 'error');
-        const grid = document.getElementById('clientesGrid');
-        if (grid) {
-            grid.innerHTML = `
-                <div class="empty-state-cards">
-                    <i class="fas fa-exclamation-circle"></i>
-                    <p>Error al cargar clientes</p>
-                </div>
-            `;
-        }
-    }
-}
-
-// NUEVO: Cargar vehículos
-async function cargarVehiculos() {
-    try {
-        const response = await fetch(`${API_URL}/vehiculos`, { headers: getAuthHeaders() });
-        if (response.status === 401) { logout(); return; }
-
-        const data = await response.json();
-        if (response.ok && data.success) {
-            vehiculosData = data.vehiculos;
-            console.log('✅ Vehículos cargados:', vehiculosData.length);
-            renderVehiculosGrid(vehiculosData);
-            const totalV = document.getElementById('totalVehiculos');
-            if (totalV) totalV.textContent = vehiculosData.length;
-        } else {
-            throw new Error(data.error || 'Error cargando vehículos');
-        }
-    } catch (error) {
-        console.error('Error cargando vehículos:', error);
-        mostrarNotificacion('Error al cargar los vehículos', 'error');
-        const grid = document.getElementById('vehiculosGrid');
-        if (grid) {
-            grid.innerHTML = `
-                <div class="empty-state-cards">
-                    <i class="fas fa-exclamation-circle"></i>
-                    <p>Error al cargar vehículos</p>
-                </div>
-            `;
-        }
-    }
-}
-
 async function cargarEstadisticas() {
     try {
         const response = await fetch(`${API_URL}/estadisticas`, { headers: getAuthHeaders() });
@@ -289,7 +246,9 @@ async function cargarEstadisticas() {
             const stats = data.estadisticas;
 
             document.getElementById('totalPersonal').textContent = stats.total_usuarios || 0;
-            document.getElementById('totalClientes').textContent = clientesData.length || 0;
+            document.getElementById('totalClientes').textContent = stats.total_clientes || 0;
+            const totalVehiculos = document.getElementById('totalVehiculos');
+            if (totalVehiculos) totalVehiculos.textContent = stats.total_vehiculos || 0;
 
             for (const rol of stats.usuarios_por_rol) {
                 const rolNombre = rol.rol_nombre;
@@ -450,20 +409,86 @@ function filtrarPersonal() {
 }
 
 // =====================================================
-// RENDER - CLIENTES
+// CLIENTES - PAGINADO CON BÚSQUEDA
 // =====================================================
-function renderClientesGrid(clientes) {
+async function cargarClientes(pagina = 1, busqueda = '') {
+    try {
+        const grid = document.getElementById('clientesGrid');
+        if (grid && pagina === 1) {
+            grid.innerHTML = `
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando clientes...</p>
+                </div>
+            `;
+        }
+
+        clientesPaginacion.pagina = pagina;
+        clientesPaginacion.busqueda = busqueda;
+
+        const params = new URLSearchParams({
+            pagina: pagina,
+            por_pagina: clientesPaginacion.porPagina,
+            busqueda: busqueda
+        });
+
+        const response = await fetch(`${API_URL}/clientes/paginado?${params}`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.status === 401) { logout(); return; }
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            clientesPaginacion.total = data.total;
+            clientesPaginacion.totalPaginas = data.total_paginas;
+
+            console.log(`✅ Clientes cargados: ${data.clientes.length} de ${data.total}`);
+
+            if (pagina === 1) {
+                clientesData = data.clientes;
+                renderClientesGrid(data.clientes, false);
+            } else {
+                clientesData = clientesData.concat(data.clientes);
+                renderClientesGrid(data.clientes, true);
+            }
+
+            const totalClientesSpan = document.getElementById('totalClientes');
+            if (totalClientesSpan) totalClientesSpan.textContent = data.total;
+        } else {
+            throw new Error(data.error || 'Error cargando clientes');
+        }
+    } catch (error) {
+        console.error('Error cargando clientes:', error);
+        mostrarNotificacion('Error al cargar los clientes', 'error');
+        const grid = document.getElementById('clientesGrid');
+        if (grid && pagina === 1) {
+            grid.innerHTML = `
+                <div class="empty-state-cards">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <p>Error al cargar clientes</p>
+                </div>
+            `;
+        }
+    }
+}
+
+function renderClientesGrid(clientes, append = false) {
     const grid = document.getElementById('clientesGrid');
     if (!grid) return;
 
-    if (!clientes || clientes.length === 0) {
-        grid.innerHTML = `
-            <div class="empty-state-cards">
-                <i class="fas fa-user-friends"></i>
-                <p>No hay clientes registrados</p>
-            </div>
-        `;
-        return;
+    if (!append) {
+        if (!clientes || clientes.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state-cards">
+                    <i class="fas fa-user-friends"></i>
+                    <p>No se encontraron clientes</p>
+                </div>
+            `;
+            return;
+        }
+        grid.innerHTML = '';
     }
 
     const getInitials = (nombre) => {
@@ -480,7 +505,7 @@ function renderClientesGrid(clientes) {
         return colors[Math.abs(hash) % colors.length];
     };
 
-    grid.innerHTML = clientes.map(cliente => `
+    const html = clientes.map(cliente => `
         <div class="cliente-card" data-id="${cliente.id}">
             <div class="cliente-card-header">
                 <div class="cliente-avatar" style="background: linear-gradient(135deg, ${getAvatarColor(cliente.nombre)}, ${getAvatarColor(cliente.nombre)}dd)">
@@ -508,18 +533,7 @@ function renderClientesGrid(clientes) {
                 <div class="vehiculos-preview">
                     <div class="vehiculos-title">
                         <i class="fas fa-car"></i>
-                        <span>Vehículos (${cliente.vehiculos?.length || 0})</span>
-                    </div>
-                    <div class="vehiculos-list-mini">
-                        ${cliente.vehiculos && cliente.vehiculos.length > 0
-                            ? cliente.vehiculos.slice(0, 2).map(v => `
-                                <span class="vehiculo-mini">
-                                    <i class="fas fa-tag"></i>
-                                    ${escapeHtml(v.placa)}
-                                </span>
-                            `).join('') + (cliente.vehiculos.length > 2 ?
-                                `<span class="vehiculo-mini">+${cliente.vehiculos.length - 2} más</span>` : '')
-                            : '<span class="no-vehiculos-badge"><i class="fas fa-car-side"></i> Sin vehículos</span>'}
+                        <span>Vehículos (${cliente.vehiculos_count || 0})</span>
                     </div>
                 </div>
             </div>
@@ -536,43 +550,133 @@ function renderClientesGrid(clientes) {
             </div>
         </div>
     `).join('');
+
+    if (append) {
+        const btnAnterior = grid.querySelector('.load-more-container');
+        if (btnAnterior) btnAnterior.remove();
+        grid.insertAdjacentHTML('beforeend', html);
+    } else {
+        grid.innerHTML = html;
+    }
+
+    // Botón "Cargar más"
+    if (clientesPaginacion.pagina < clientesPaginacion.totalPaginas) {
+        const btnExistente = grid.querySelector('.load-more-container');
+        if (btnExistente) btnExistente.remove();
+
+        grid.insertAdjacentHTML('beforeend', `
+            <div class="load-more-container">
+                <button class="btn-load-more" onclick="cargarMasClientes()">
+                    <i class="fas fa-chevron-down"></i>
+                    Cargar más (${clientesData.length} de ${clientesPaginacion.total})
+                </button>
+            </div>
+        `);
+    }
 }
 
 function filtrarClientes() {
-    const searchTerm = document.getElementById('searchClientes')?.value.toLowerCase() || '';
+    const searchTerm = document.getElementById('searchClientes')?.value.trim() || '';
 
-    if (!searchTerm) {
-        renderClientesGrid(clientesData);
-        return;
+    if (clientesPaginacion.timerBusqueda) {
+        clearTimeout(clientesPaginacion.timerBusqueda);
     }
 
-    const filtrados = clientesData.filter(c =>
-        c.nombre.toLowerCase().includes(searchTerm) ||
-        (c.email && c.email.toLowerCase().includes(searchTerm)) ||
-        (c.contacto && c.contacto.includes(searchTerm))
-    );
+    clientesPaginacion.timerBusqueda = setTimeout(() => {
+        cargarClientes(1, searchTerm);
+    }, 400);
+}
 
-    renderClientesGrid(filtrados);
+function cargarMasClientes() {
+    if (clientesPaginacion.pagina < clientesPaginacion.totalPaginas) {
+        cargarClientes(clientesPaginacion.pagina + 1, clientesPaginacion.busqueda);
+    }
 }
 
 // =====================================================
-// RENDER - VEHÍCULOS
+// VEHÍCULOS - PAGINADO CON BÚSQUEDA
 // =====================================================
-function renderVehiculosGrid(vehiculos) {
+async function cargarVehiculos(pagina = 1, busqueda = '') {
+    try {
+        const grid = document.getElementById('vehiculosGrid');
+        if (grid && pagina === 1) {
+            grid.innerHTML = `
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando vehículos...</p>
+                </div>
+            `;
+        }
+
+        vehiculosPaginacion.pagina = pagina;
+        vehiculosPaginacion.busqueda = busqueda;
+
+        const params = new URLSearchParams({
+            pagina: pagina,
+            por_pagina: vehiculosPaginacion.porPagina,
+            busqueda: busqueda
+        });
+
+        const response = await fetch(`${API_URL}/vehiculos/paginado?${params}`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.status === 401) { logout(); return; }
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            vehiculosPaginacion.total = data.total;
+            vehiculosPaginacion.totalPaginas = data.total_paginas;
+
+            console.log(`✅ Vehículos cargados: ${data.vehiculos.length} de ${data.total}`);
+
+            if (pagina === 1) {
+                vehiculosData = data.vehiculos;
+                renderVehiculosGrid(data.vehiculos, false);
+            } else {
+                vehiculosData = vehiculosData.concat(data.vehiculos);
+                renderVehiculosGrid(data.vehiculos, true);
+            }
+
+            const totalV = document.getElementById('totalVehiculos');
+            if (totalV) totalV.textContent = data.total;
+        } else {
+            throw new Error(data.error || 'Error cargando vehículos');
+        }
+    } catch (error) {
+        console.error('Error cargando vehículos:', error);
+        mostrarNotificacion('Error al cargar los vehículos', 'error');
+        const grid = document.getElementById('vehiculosGrid');
+        if (grid && pagina === 1) {
+            grid.innerHTML = `
+                <div class="empty-state-cards">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <p>Error al cargar vehículos</p>
+                </div>
+            `;
+        }
+    }
+}
+
+function renderVehiculosGrid(vehiculos, append = false) {
     const grid = document.getElementById('vehiculosGrid');
     if (!grid) return;
 
-    if (!vehiculos || vehiculos.length === 0) {
-        grid.innerHTML = `
-            <div class="empty-state-cards">
-                <i class="fas fa-car"></i>
-                <p>No hay vehículos registrados</p>
-            </div>
-        `;
-        return;
+    if (!append) {
+        if (!vehiculos || vehiculos.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state-cards">
+                    <i class="fas fa-car"></i>
+                    <p>No se encontraron vehículos</p>
+                </div>
+            `;
+            return;
+        }
+        grid.innerHTML = '';
     }
 
-    grid.innerHTML = vehiculos.map(v => `
+    const html = vehiculos.map(v => `
         <div class="vehiculo-card" data-id="${v.id}">
             <div class="vehiculo-card-header">
                 <div class="vehiculo-icon">
@@ -620,24 +724,47 @@ function renderVehiculosGrid(vehiculos) {
             </div>
         </div>
     `).join('');
+
+    if (append) {
+        const btnAnterior = grid.querySelector('.load-more-container');
+        if (btnAnterior) btnAnterior.remove();
+        grid.insertAdjacentHTML('beforeend', html);
+    } else {
+        grid.innerHTML = html;
+    }
+
+    // Botón "Cargar más"
+    if (vehiculosPaginacion.pagina < vehiculosPaginacion.totalPaginas) {
+        const btnExistente = grid.querySelector('.load-more-container');
+        if (btnExistente) btnExistente.remove();
+
+        grid.insertAdjacentHTML('beforeend', `
+            <div class="load-more-container">
+                <button class="btn-load-more" onclick="cargarMasVehiculos()">
+                    <i class="fas fa-chevron-down"></i>
+                    Cargar más (${vehiculosData.length} de ${vehiculosPaginacion.total})
+                </button>
+            </div>
+        `);
+    }
 }
 
 function filtrarVehiculos() {
-    const searchTerm = document.getElementById('searchVehiculos')?.value.toLowerCase() || '';
+    const searchTerm = document.getElementById('searchVehiculos')?.value.trim() || '';
 
-    if (!searchTerm) {
-        renderVehiculosGrid(vehiculosData);
-        return;
+    if (vehiculosPaginacion.timerBusqueda) {
+        clearTimeout(vehiculosPaginacion.timerBusqueda);
     }
 
-    const filtrados = vehiculosData.filter(v =>
-        (v.placa && v.placa.toLowerCase().includes(searchTerm)) ||
-        (v.marca && v.marca.toLowerCase().includes(searchTerm)) ||
-        (v.modelo && v.modelo.toLowerCase().includes(searchTerm)) ||
-        (v.cliente_nombre && v.cliente_nombre.toLowerCase().includes(searchTerm))
-    );
+    vehiculosPaginacion.timerBusqueda = setTimeout(() => {
+        cargarVehiculos(1, searchTerm);
+    }, 400);
+}
 
-    renderVehiculosGrid(filtrados);
+function cargarMasVehiculos() {
+    if (vehiculosPaginacion.pagina < vehiculosPaginacion.totalPaginas) {
+        cargarVehiculos(vehiculosPaginacion.pagina + 1, vehiculosPaginacion.busqueda);
+    }
 }
 
 // =====================================================
@@ -709,56 +836,78 @@ function cerrarModalDetalleUsuario() {
 }
 
 // =====================================================
-// VER DETALLE - CLIENTE
+// VER DETALLE - CLIENTE (AHORA CON LLAMADA AL SERVIDOR)
 // =====================================================
-function verDetalleCliente(clienteId) {
-    const cliente = clientesData.find(c => c.id === clienteId);
-    if (!cliente) return;
+async function verDetalleCliente(clienteId) {
+    try {
+        mostrarNotificacion('Cargando datos...', 'info');
 
-    const modalBody = document.getElementById('modalDetalleClienteBody');
-    if (modalBody) {
-        modalBody.innerHTML = `
-            <div class="detalle-cliente">
-                <div class="info-group">
-                    <label><i class="fas fa-user"></i> Nombre completo</label>
-                    <p>${escapeHtml(cliente.nombre)}</p>
-                </div>
-                <div class="info-group">
-                    <label><i class="fas fa-envelope"></i> Correo electrónico</label>
-                    <p>${escapeHtml(cliente.email || 'No registrado')}</p>
-                </div>
-                <div class="info-group">
-                    <label><i class="fas fa-phone"></i> Teléfono / Contacto</label>
-                    <p>${escapeHtml(cliente.contacto || 'No registrado')}</p>
-                </div>
-                <div class="info-group">
-                    <label><i class="fas fa-map-marker-alt"></i> Ubicación</label>
-                    <p>${escapeHtml(cliente.ubicacion || 'No registrada')}</p>
-                </div>
-                <div class="info-group">
-                    <label><i class="fas fa-calendar-alt"></i> Cliente desde</label>
-                    <p>${formatDate(cliente.fecha_registro)}</p>
-                </div>
-                <div class="info-group">
-                    <label><i class="fas fa-car"></i> Vehículos registrados</label>
-                    <div class="vehiculos-list">
-                        ${cliente.vehiculos && cliente.vehiculos.length > 0
-                            ? cliente.vehiculos.map(v => `
-                                <div class="vehiculo-item">
-                                    <span class="placa">${escapeHtml(v.placa)}</span>
-                                    <span>${escapeHtml(v.marca)} ${escapeHtml(v.modelo)}</span>
-                                    <span class="anio">${v.anio || 'N/A'}</span>
-                                    <span class="km">${(v.kilometraje || 0).toLocaleString()} km</span>
-                                </div>
-                            `).join('')
-                            : '<p class="no-data">No tiene vehículos registrados</p>'}
+        const response = await fetch(`${API_URL}/cliente/${clienteId}/detalle`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.status === 401) { logout(); return; }
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            const cliente = data.cliente;
+            const modalBody = document.getElementById('modalDetalleClienteBody');
+
+            if (modalBody) {
+                modalBody.innerHTML = `
+                    <div class="detalle-cliente">
+                        <div class="info-group">
+                            <label><i class="fas fa-user"></i> Nombre completo</label>
+                            <p>${escapeHtml(cliente.nombre)}</p>
+                        </div>
+                        <div class="info-group">
+                            <label><i class="fas fa-envelope"></i> Correo electrónico</label>
+                            <p>${escapeHtml(cliente.email || 'No registrado')}</p>
+                        </div>
+                        <div class="info-group">
+                            <label><i class="fas fa-phone"></i> Teléfono / Contacto</label>
+                            <p>${escapeHtml(cliente.contacto || 'No registrado')}</p>
+                        </div>
+                        <div class="info-group">
+                            <label><i class="fas fa-map-marker-alt"></i> Ubicación</label>
+                            <p>${escapeHtml(cliente.ubicacion || 'No registrada')}</p>
+                        </div>
+                        <div class="info-group">
+                            <label><i class="fas fa-id-card"></i> Documento</label>
+                            <p>${escapeHtml(cliente.numero_documento || 'No registrado')}</p>
+                        </div>
+                        <div class="info-group">
+                            <label><i class="fas fa-calendar-alt"></i> Cliente desde</label>
+                            <p>${formatDate(cliente.fecha_registro)}</p>
+                        </div>
+                        <div class="info-group">
+                            <label><i class="fas fa-car"></i> Vehículos registrados (${cliente.vehiculos?.length || 0})</label>
+                            <div class="vehiculos-list">
+                                ${cliente.vehiculos && cliente.vehiculos.length > 0
+                                    ? cliente.vehiculos.map(v => `
+                                        <div class="vehiculo-item">
+                                            <span class="placa">${escapeHtml(v.placa)}</span>
+                                            <span>${escapeHtml(v.marca || '')} ${escapeHtml(v.modelo || '')}</span>
+                                            <span class="anio">${v.anio || 'N/A'}</span>
+                                            <span class="km">${(v.kilometraje || 0).toLocaleString()} km</span>
+                                        </div>
+                                    `).join('')
+                                    : '<p class="no-data">No tiene vehículos registrados</p>'}
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
-        `;
-    }
+                `;
+            }
 
-    document.getElementById('modalDetalleCliente').classList.add('show');
+            document.getElementById('modalDetalleCliente').classList.add('show');
+        } else {
+            throw new Error(data.error || 'Error al cargar detalles');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion(error.message, 'error');
+    }
 }
 
 function cerrarModalDetalleCliente() {
@@ -766,7 +915,7 @@ function cerrarModalDetalleCliente() {
 }
 
 // =====================================================
-// VER DETALLE - VEHÍCULO (NUEVO)
+// VER DETALLE - VEHÍCULO
 // =====================================================
 async function verDetalleVehiculo(vehiculoId) {
     try {
@@ -859,7 +1008,7 @@ function cerrarModalDetalleVehiculo() {
 }
 
 // =====================================================
-// ELIMINAR USUARIO CON VERIFICACIÓN
+// ELIMINAR USUARIO
 // =====================================================
 async function eliminarUsuario(usuarioId) {
     const usuario = usuariosData.find(u => u.id === usuarioId);
@@ -957,7 +1106,7 @@ async function guardarEdicionCliente() {
         if (response.ok && data.success) {
             mostrarNotificacion('Cliente actualizado correctamente', 'success');
             cerrarModalEditarCliente();
-            await cargarClientes();
+            await cargarClientes(1, clientesPaginacion.busqueda);
         } else {
             throw new Error(data.error || 'Error al actualizar cliente');
         }
@@ -985,8 +1134,9 @@ function eliminarCliente(clienteId) {
 
                 if (response.ok && data.success) {
                     mostrarNotificacion('Cliente eliminado correctamente', 'success');
-                    await cargarClientes();
-                    await cargarVehiculos();
+                    await cargarClientes(1, clientesPaginacion.busqueda);
+                    await cargarVehiculos(1, vehiculosPaginacion.busqueda);
+                    await cargarEstadisticas();
                 } else if (response.status === 409) {
                     mostrarNotificacion(data.error, 'error');
                 } else {
@@ -1003,24 +1153,39 @@ function eliminarCliente(clienteId) {
 // =====================================================
 // CRUD VEHÍCULOS
 // =====================================================
-function abrirModalEditarVehiculo(vehiculoId) {
+async function abrirModalEditarVehiculo(vehiculoId) {
     const vehiculo = vehiculosData.find(v => v.id === vehiculoId);
     if (!vehiculo) {
         mostrarNotificacion('Vehículo no encontrado', 'error');
         return;
     }
 
-    // Cargar lista de clientes en el select
+    // Cargar lista ligera de clientes bajo demanda
     const selectCliente = document.getElementById('editVehiculoCliente');
-    selectCliente.innerHTML = '<option value="">-- Seleccionar cliente --</option>';
+    selectCliente.innerHTML = '<option value="">Cargando clientes...</option>';
 
-    clientesData.forEach(c => {
-        const option = document.createElement('option');
-        option.value = c.id;
-        option.textContent = `${c.nombre} ${c.email ? `(${c.email})` : ''}`;
-        if (c.id === vehiculo.id_cliente) option.selected = true;
-        selectCliente.appendChild(option);
-    });
+    try {
+        const response = await fetch(`${API_URL}/clientes/todos-ligero`, {
+            headers: getAuthHeaders()
+        });
+
+        const data = await response.json();
+
+        selectCliente.innerHTML = '<option value="">-- Seleccionar cliente --</option>';
+
+        if (response.ok && data.success) {
+            data.clientes.forEach(c => {
+                const option = document.createElement('option');
+                option.value = c.id;
+                option.textContent = `${c.nombre} ${c.email ? `(${c.email})` : ''}`;
+                if (c.id === vehiculo.id_cliente) option.selected = true;
+                selectCliente.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error cargando clientes:', error);
+        selectCliente.innerHTML = '<option value="">Error al cargar clientes</option>';
+    }
 
     document.getElementById('editVehiculoId').value = vehiculo.id;
     document.getElementById('editVehiculoPlaca').value = vehiculo.placa || '';
@@ -1071,7 +1236,7 @@ async function guardarEdicionVehiculo() {
         if (response.ok && data.success) {
             mostrarNotificacion('Vehículo actualizado correctamente', 'success');
             cerrarModalEditarVehiculo();
-            await cargarVehiculos();
+            await cargarVehiculos(1, vehiculosPaginacion.busqueda);
         } else {
             throw new Error(data.error || 'Error al actualizar vehículo');
         }
@@ -1099,8 +1264,9 @@ function eliminarVehiculo(vehiculoId) {
 
                 if (response.ok && data.success) {
                     mostrarNotificacion('Vehículo eliminado correctamente', 'success');
-                    await cargarVehiculos();
-                    await cargarClientes();
+                    await cargarVehiculos(1, vehiculosPaginacion.busqueda);
+                    await cargarClientes(1, clientesPaginacion.busqueda);
+                    await cargarEstadisticas();
                 } else if (response.status === 409) {
                     mostrarNotificacion(data.error, 'error');
                 } else {
@@ -1578,7 +1744,7 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
 }
 
 // =====================================================
-// FUNCIONES GLOBALES (exponer al window)
+// FUNCIONES GLOBALES
 // =====================================================
 
 // Personal
@@ -1600,6 +1766,7 @@ window.abrirModalEditarCliente = abrirModalEditarCliente;
 window.cerrarModalEditarCliente = cerrarModalEditarCliente;
 window.guardarEdicionCliente = guardarEdicionCliente;
 window.eliminarCliente = eliminarCliente;
+window.cargarMasClientes = cargarMasClientes;
 
 // Vehículos
 window.verDetalleVehiculo = verDetalleVehiculo;
@@ -1608,12 +1775,13 @@ window.abrirModalEditarVehiculo = abrirModalEditarVehiculo;
 window.cerrarModalEditarVehiculo = cerrarModalEditarVehiculo;
 window.guardarEdicionVehiculo = guardarEdicionVehiculo;
 window.eliminarVehiculo = eliminarVehiculo;
+window.cargarMasVehiculos = cargarMasVehiculos;
 
-// Confirmación genérica
+// Confirmación
 window.cerrarModalConfirmarEliminar = cerrarModalConfirmarEliminar;
 window.confirmarEliminar = confirmarEliminar;
 
 // Auth
 window.logout = logout;
 
-console.log('✅ admin_roles.js cargado completamente (Personal + Clientes + Vehículos)');
+console.log('✅ admin_roles.js cargado completamente (con paginación)');

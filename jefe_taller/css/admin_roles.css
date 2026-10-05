@@ -1,7 +1,7 @@
 /* =====================================================
    ADMINISTRACIÓN DE ROLES - ESTILOS COMPLETOS
    FURIA MOTOR COMPANY SRL
-   VERSIÓN: Personal + Clientes + Vehículos (con paginación)
+   VERSIÓN: Personal + Clientes + Vehículos (con paginación + loader)
    ===================================================== */
 
 /* =====================================================
@@ -1160,6 +1160,91 @@ body.sidebar-open {
 .empty-state-cards p {
     font-size: 0.9rem;
     margin: 0;
+}
+
+/* =====================================================
+   LOADER GLOBAL CIRCULAR (para carga inicial de tabs)
+   ===================================================== */
+.global-loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(10, 10, 12, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: loaderFadeIn 0.25s ease;
+}
+
+.global-loader-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+/* Círculo giratorio */
+.loader-circle {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    border: 4px solid rgba(193, 18, 31, 0.15);
+    border-top-color: var(--rojo-primario);
+    border-right-color: var(--rojo-primario);
+    animation: spinLoader 0.9s linear infinite;
+    position: relative;
+}
+
+/* Círculo interior más suave */
+.loader-circle::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    border-top-color: var(--rojo-claro);
+    animation: spinLoader 1.4s linear infinite reverse;
+}
+
+/* Texto */
+.loader-text {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--blanco-texto);
+    letter-spacing: 0.5px;
+    margin: 0;
+    animation: pulseText 1.5s ease-in-out infinite;
+}
+
+@keyframes spinLoader {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes loaderFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes pulseText {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
 }
 
 /* =====================================================
@@ -2487,6 +2572,25 @@ body.sidebar-open {
     .spacer-item {
         height: 40px !important;
         min-height: 40px !important;
+    }
+
+    /* Loader responsive */
+    .loader-circle {
+        width: 55px;
+        height: 55px;
+        border-width: 3px;
+    }
+
+    .loader-circle::after {
+        top: 6px;
+        left: 6px;
+        right: 6px;
+        bottom: 6px;
+        border-width: 2px;
+    }
+
+    .loader-text {
+        font-size: 0.85rem;
     }
 }
 

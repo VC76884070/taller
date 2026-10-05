@@ -1,7 +1,7 @@
 // =====================================================
 // ADMINISTRACIÓN DE ROLES - JEFE TALLER (OPTIMIZADO)
 // FURIA MOTOR COMPANY SRL
-// VERSIÓN: Personal + Clientes + Vehículos con paginación
+// VERSIÓN: Personal + Clientes + Vehículos con paginación + loader
 // =====================================================
 
 // =====================================================
@@ -55,11 +55,34 @@ let vehiculosPaginacion = {
     timerBusqueda: null
 };
 
+// Flags de carga inicial (evita recargar si ya se cargó)
+let clientesCargados = false;
+let vehiculosCargados = false;
+
 // IDs de roles críticos
 const ROLES_CRITICOS = {
     tecnico: 3,
     encargado_repuestos: 4
 };
+
+// =====================================================
+// FUNCIONES DEL LOADER GLOBAL
+// =====================================================
+function mostrarLoaderGlobal() {
+    const loader = document.getElementById('globalLoader');
+    if (loader) {
+        loader.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function ocultarLoaderGlobal() {
+    const loader = document.getElementById('globalLoader');
+    if (loader) {
+        loader.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+}
 
 // =====================================================
 // INICIALIZACIÓN
@@ -72,12 +95,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!autenticado) return;
 
     initPage();
-    await cargarRoles();
-    await cargarUsuarios();
-    await cargarClientes(1, '');
-    await cargarVehiculos(1, '');
-    await cargarEstadisticas();
     setupEventListeners();
+
+    // Solo cargar Personal y Roles al inicio (es la pestaña por defecto)
+    mostrarLoaderGlobal();
+    try {
+        await cargarRoles();
+        await cargarUsuarios();
+        await cargarEstadisticas();
+    } finally {
+        ocultarLoaderGlobal();
+    }
 
     cambiarPestana('personal');
 });
@@ -168,6 +196,7 @@ function setupEventListeners() {
 }
 
 function cambiarPestana(tabId) {
+    // Cambiar clases activas
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tab === tabId);
     });
@@ -175,6 +204,23 @@ function cambiarPestana(tabId) {
     document.querySelectorAll('.tab-panel').forEach(panel => {
         panel.classList.toggle('active', panel.id === `panel-${tabId}`);
     });
+
+    // Cargar datos bajo demanda con loader
+    if (tabId === 'clientes' && !clientesCargados) {
+        mostrarLoaderGlobal();
+        cargarClientes(1, '')
+            .then(() => { clientesCargados = true; })
+            .catch(err => console.error('Error cargando clientes:', err))
+            .finally(() => ocultarLoaderGlobal());
+    }
+
+    if (tabId === 'vehiculos' && !vehiculosCargados) {
+        mostrarLoaderGlobal();
+        cargarVehiculos(1, '')
+            .then(() => { vehiculosCargados = true; })
+            .catch(err => console.error('Error cargando vehículos:', err))
+            .finally(() => ocultarLoaderGlobal());
+    }
 }
 
 function logout() {
@@ -245,9 +291,7 @@ async function cargarEstadisticas() {
         if (response.ok && data.success) {
             const stats = data.estadisticas;
 
-            // NOTA: Ya no actualizamos los badges de los tabs (fueron eliminados del HTML)
-            // Solo actualizamos las tarjetas de estadísticas de la pestaña Personal
-
+            // Actualizar tarjetas de estadísticas del panel de Personal
             for (const rol of stats.usuarios_por_rol) {
                 const rolNombre = rol.rol_nombre;
                 const cantidad = rol.cantidad;
@@ -418,7 +462,7 @@ function filtrarPersonal() {
 async function cargarClientes(pagina = 1, busqueda = '') {
     try {
         const grid = document.getElementById('clientesGrid');
-        if (grid && pagina === 1) {
+        if (grid && pagina === 1 && !clientesCargados) {
             grid.innerHTML = `
                 <div class="loading-state">
                     <i class="fas fa-spinner fa-spin"></i>
@@ -472,6 +516,7 @@ async function cargarClientes(pagina = 1, busqueda = '') {
                 </div>
             `;
         }
+        throw error;
     }
 }
 
@@ -584,7 +629,9 @@ function filtrarClientes() {
     }
 
     clientesPaginacion.timerBusqueda = setTimeout(() => {
-        cargarClientes(1, searchTerm);
+        cargarClientes(1, searchTerm).then(() => {
+            clientesCargados = true;
+        });
     }, 400);
 }
 
@@ -600,7 +647,7 @@ function cargarMasClientes() {
 async function cargarVehiculos(pagina = 1, busqueda = '') {
     try {
         const grid = document.getElementById('vehiculosGrid');
-        if (grid && pagina === 1) {
+        if (grid && pagina === 1 && !vehiculosCargados) {
             grid.innerHTML = `
                 <div class="loading-state">
                     <i class="fas fa-spinner fa-spin"></i>
@@ -654,6 +701,7 @@ async function cargarVehiculos(pagina = 1, busqueda = '') {
                 </div>
             `;
         }
+        throw error;
     }
 }
 
@@ -755,7 +803,9 @@ function filtrarVehiculos() {
     }
 
     vehiculosPaginacion.timerBusqueda = setTimeout(() => {
-        cargarVehiculos(1, searchTerm);
+        cargarVehiculos(1, searchTerm).then(() => {
+            vehiculosCargados = true;
+        });
     }, 400);
 }
 
@@ -1782,4 +1832,4 @@ window.confirmarEliminar = confirmarEliminar;
 // Auth
 window.logout = logout;
 
-console.log('✅ admin_roles.js cargado completamente (con paginación y responsive)');
+console.log('✅ admin_roles.js cargado completamente (con paginación + loader + responsive)');

@@ -178,6 +178,10 @@
                     "definicion": "CREATE INDEX idx_avance_estado ON public.avance_trabajo USING btree (estado)"
                 },
                 {
+                    "nombre": "idx_avance_numero_orden",
+                    "definicion": "CREATE INDEX idx_avance_numero_orden ON public.avance_trabajo USING btree (id_orden_trabajo, numero_avance)"
+                },
+                {
                     "nombre": "idx_avance_tecnico",
                     "definicion": "CREATE INDEX idx_avance_tecnico ON public.avance_trabajo USING btree (id_tecnico)"
                 }
@@ -284,6 +288,14 @@
                     "nombre": "numero_actualizaciones",
                     "default": "0",
                     "posicion": 13,
+                    "obligatorio": false,
+                    "tipo_completo": "integer"
+                },
+                {
+                    "tipo": "integer",
+                    "nombre": "numero_avance",
+                    "default": "0",
+                    "posicion": 14,
                     "obligatorio": false,
                     "tipo_completo": "integer"
                 }
@@ -2483,14 +2495,14 @@
             ],
             "claves_foraneas": [
                 {
-                    "columna": "id_jefe_operativo",
-                    "constraint": "ordentrabajo_id_jefe_operativo_fkey",
+                    "columna": "id_jefe_operativo_2",
+                    "constraint": "ordentrabajo_id_jefe_operativo_2_fkey",
                     "tabla_referenciada": "usuario",
                     "columna_referenciada": "id"
                 },
                 {
-                    "columna": "id_jefe_operativo_2",
-                    "constraint": "ordentrabajo_id_jefe_operativo_2_fkey",
+                    "columna": "id_jefe_operativo",
+                    "constraint": "ordentrabajo_id_jefe_operativo_fkey",
                     "tabla_referenciada": "usuario",
                     "columna_referenciada": "id"
                 },
@@ -3464,6 +3476,14 @@
                     "posicion": 11,
                     "obligatorio": false,
                     "tipo_completo": "timestamp without time zone"
+                },
+                {
+                    "tipo": "jsonb",
+                    "nombre": "comentarios",
+                    "default": "'{}'::jsonb",
+                    "posicion": 12,
+                    "obligatorio": false,
+                    "tipo_completo": "jsonb"
                 }
             ],
             "clave_primaria": [
@@ -3656,6 +3676,14 @@
                     "posicion": 22,
                     "obligatorio": false,
                     "tipo_completo": "text"
+                },
+                {
+                    "tipo": "integer",
+                    "nombre": "proveedor_id",
+                    "default": null,
+                    "posicion": 23,
+                    "obligatorio": false,
+                    "tipo_completo": "integer"
                 }
             ],
             "clave_primaria": [
@@ -4828,34 +4856,3 @@
         }
     ]
 }
-
-
-ALTER TABLE avance_trabajo 
-ADD COLUMN IF NOT EXISTS numero_avance INTEGER DEFAULT 0;
--- Actualizar los avances existentes con un número secuencial
--- por cada orden de trabajo
-UPDATE avance_trabajo a
-SET numero_avance = subquery.numero
-FROM (
-    SELECT 
-        id,
-        ROW_NUMBER() OVER (
-            PARTITION BY id_orden_trabajo 
-            ORDER BY fecha_creacion
-        ) as numero
-    FROM avance_trabajo
-) subquery
-WHERE a.id = subquery.id;
-
--- Crear índice para búsquedas rápidas
-CREATE INDEX IF NOT EXISTS idx_avance_numero_orden 
-ON avance_trabajo (id_orden_trabajo, numero_avance);
-
-
-ALTER TABLE solicitud_compra ADD COLUMN proveedor_id INTEGER;
-
-
-ALTER TABLE sesion_colaborativa ADD COLUMN IF NOT EXISTS comentarios JSONB DEFAULT '{}';
-
-ALTER TABLE sesion_colaborativa 
-ADD COLUMN IF NOT EXISTS comentarios JSONB DEFAULT '{}';

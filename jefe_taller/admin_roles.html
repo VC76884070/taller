@@ -17,14 +17,14 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TORQUE">
-    
+
     <!-- ICONO PARA LA PESTAÑA DEL NAVEGADOR -->
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
-    
+
     <!-- ICONO PARA IPHONE / IPAD (pantalla de inicio) -->
     <link rel="apple-touch-icon" href="/icono.png">
-    
+
     <!-- ICONO PARA ANDROID (chrome) -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
@@ -46,7 +46,7 @@
         <div class="top-bar">
             <div class="page-title">
                 <h1><i class="fas fa-user-tag"></i> Administración de Roles</h1>
-                <p>Gestión de personal y visualización de clientes</p>
+                <p>Gestión de personal, clientes y vehículos</p>
             </div>
             <div class="top-actions">
                 <div class="date-display">
@@ -70,9 +70,15 @@
                 <i class="fas fa-user-friends"></i> Clientes
                 <span class="badge" id="totalClientes">0</span>
             </button>
+            <button class="tab-btn" data-tab="vehiculos">
+                <i class="fas fa-car"></i> Vehículos
+                <span class="badge" id="totalVehiculos">0</span>
+            </button>
         </div>
 
-        <!-- Panel de Personal -->
+        <!-- ===================================================== -->
+        <!-- PANEL DE PERSONAL -->
+        <!-- ===================================================== -->
         <div class="tab-panel active" id="panel-personal">
             <!-- Estadísticas -->
             <div class="stats-grid">
@@ -152,7 +158,9 @@
             </div>
         </div>
 
-        <!-- Panel de Clientes - VERSIÓN TARJETAS -->
+        <!-- ===================================================== -->
+        <!-- PANEL DE CLIENTES -->
+        <!-- ===================================================== -->
         <div class="tab-panel" id="panel-clientes">
             <!-- Filtros -->
             <div class="card">
@@ -173,7 +181,35 @@
                 </div>
             </div>
         </div>
+
+        <!-- ===================================================== -->
+        <!-- PANEL DE VEHÍCULOS -->
+        <!-- ===================================================== -->
+        <div class="tab-panel" id="panel-vehiculos">
+            <!-- Filtros -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-filter"></i> Filtrar Vehículos</h3>
+                </div>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchVehiculos" placeholder="Buscar por placa, marca, modelo o cliente...">
+                </div>
+            </div>
+
+            <!-- Grid de Tarjetas de Vehículos -->
+            <div class="vehiculos-grid" id="vehiculosGrid">
+                <div class="loading-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando vehículos...</p>
+                </div>
+            </div>
+        </div>
     </main>
+
+    <!-- ===================================================== -->
+    <!-- MODALES -->
+    <!-- ===================================================== -->
 
     <!-- Modal Detalle Usuario -->
     <div id="modalDetalleUsuario" class="modal">
@@ -199,6 +235,20 @@
             <div id="modalDetalleClienteBody" class="modal-body"></div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModalDetalleCliente()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Detalle Vehículo -->
+    <div id="modalDetalleVehiculo" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3><i class="fas fa-car"></i> Detalle del Vehículo</h3>
+                <button class="modal-close" onclick="cerrarModalDetalleVehiculo()">&times;</button>
+            </div>
+            <div id="modalDetalleVehiculoBody" class="modal-body"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalDetalleVehiculo()">Cerrar</button>
             </div>
         </div>
     </div>
@@ -244,35 +294,164 @@
         </div>
     </div>
 
+    <!-- ===================================================== -->
+    <!-- MODAL EDITAR CLIENTE -->
+    <!-- ===================================================== -->
+    <div id="modalEditarCliente" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-edit"></i> Editar Cliente</h3>
+                <button class="modal-close" onclick="cerrarModalEditarCliente()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="formEditarCliente" onsubmit="event.preventDefault(); guardarEdicionCliente();">
+                    <input type="hidden" id="editClienteId">
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-user"></i> Nombre completo *</label>
+                        <input type="text" id="editClienteNombre" class="form-input" required
+                            placeholder="Nombre del cliente">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-envelope"></i> Email</label>
+                        <input type="email" id="editClienteEmail" class="form-input" placeholder="correo@ejemplo.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-phone"></i> Teléfono</label>
+                        <input type="text" id="editClienteContacto" class="form-input" placeholder="+591 70000000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-map-marker-alt"></i> Ubicación</label>
+                        <input type="text" id="editClienteUbicacion" class="form-input"
+                            placeholder="Ciudad, Zona, Dirección">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalEditarCliente()">Cancelar</button>
+                <button class="btn-primary" onclick="guardarEdicionCliente()">
+                    <i class="fas fa-save"></i> Guardar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- MODAL EDITAR VEHÍCULO -->
+    <!-- ===================================================== -->
+    <div id="modalEditarVehiculo" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-car"></i> Editar Vehículo</h3>
+                <button class="modal-close" onclick="cerrarModalEditarVehiculo()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="formEditarVehiculo" onsubmit="event.preventDefault(); guardarEdicionVehiculo();">
+                    <input type="hidden" id="editVehiculoId">
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-tag"></i> Placa *</label>
+                        <input type="text" id="editVehiculoPlaca" class="form-input" required placeholder="ABC-1234"
+                            style="text-transform: uppercase;">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label"><i class="fas fa-car"></i> Marca</label>
+                            <input type="text" id="editVehiculoMarca" class="form-input"
+                                placeholder="Toyota, Nissan...">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label"><i class="fas fa-car-side"></i> Modelo</label>
+                            <input type="text" id="editVehiculoModelo" class="form-input"
+                                placeholder="Corolla, Sentra...">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label"><i class="fas fa-calendar"></i> Año</label>
+                            <input type="number" id="editVehiculoAnio" class="form-input" min="1900" max="2100"
+                                placeholder="2020">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label"><i class="fas fa-tachometer-alt"></i> Kilometraje</label>
+                            <input type="number" id="editVehiculoKilometraje" class="form-input" min="0"
+                                placeholder="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label"><i class="fas fa-user"></i> Cliente propietario</label>
+                        <select id="editVehiculoCliente" class="form-select">
+                            <option value="">-- Seleccionar cliente --</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalEditarVehiculo()">Cancelar</button>
+                <button class="btn-primary" onclick="guardarEdicionVehiculo()">
+                    <i class="fas fa-save"></i> Guardar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- MODAL CONFIRMACIÓN ELIMINAR -->
+    <!-- ===================================================== -->
+    <div id="modalConfirmarEliminar" class="modal">
+        <div class="modal-content" style="max-width: 460px;">
+            <div class="modal-header" style="background: #dc2626;">
+                <h3><i class="fas fa-exclamation-triangle"></i> Confirmar Eliminación</h3>
+                <button class="modal-close" onclick="cerrarModalConfirmarEliminar()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div>
+                        <strong id="confirmarEliminarTitulo">¿Estás seguro?</strong>
+                        <p id="confirmarEliminarMensaje">Esta acción no se puede deshacer.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="cerrarModalConfirmarEliminar()">Cancelar</button>
+                <button class="btn-danger" onclick="confirmarEliminar()">
+                    <i class="fas fa-trash-alt"></i> Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- SCRIPTS -->
+    <!-- ===================================================== -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/include.js"></script>
     <script src="js/admin_roles.js"></script>
-    
+
     <!-- ========== SCRIPT RESPONSIVE PARA SIDEBAR (ADMIN ROLES) ========== -->
     <script>
         // =====================================================
         // FUNCIONES RESPONSIVE PARA SIDEBAR (ADMIN ROLES)
         // =====================================================
-        
+
         let sidebarOpen = false;
-        
+
         // Función para toggle sidebar en móvil/tablet
         function toggleSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
-            
+
             if (!sidebar) return;
-            
+
             sidebarOpen = !sidebarOpen;
-            
+
             if (sidebarOpen) {
                 sidebar.classList.add('open');
                 if (overlay) overlay.classList.add('active');
                 if (hamburger) hamburger.classList.add('active');
                 body.classList.add('sidebar-open');
-                
+
                 // Cambiar icono del hamburguesa
                 const icon = hamburger.querySelector('i');
                 if (icon) icon.className = 'fas fa-times';
@@ -280,63 +459,63 @@
                 closeSidebar();
             }
         }
-        
+
         // Función para cerrar sidebar
         function closeSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
-            
+
             if (sidebar) {
                 sidebar.classList.remove('open');
                 if (overlay) overlay.classList.remove('active');
                 if (hamburger) hamburger.classList.remove('active');
                 body.classList.remove('sidebar-open');
-                
+
                 const icon = hamburger.querySelector('i');
                 if (icon) icon.className = 'fas fa-bars';
             }
-            
+
             sidebarOpen = false;
         }
-        
+
         // Event Listeners
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             // Botón hamburguesa
             const hamburgerBtn = document.getElementById('hamburgerMenu');
             if (hamburgerBtn) {
                 hamburgerBtn.addEventListener('click', toggleSidebar);
             }
-            
+
             // Overlay
             const overlay = document.getElementById('sidebarOverlay');
             if (overlay) {
                 overlay.addEventListener('click', closeSidebar);
             }
-            
+
             // Cerrar sidebar al redimensionar a desktop
-            window.addEventListener('resize', function() {
+            window.addEventListener('resize', function () {
                 if (window.innerWidth > 1024 && sidebarOpen) {
                     closeSidebar();
                 }
             });
-            
+
             // Cerrar sidebar al hacer click en enlaces (móvil)
-            document.addEventListener('click', function(e) {
+            document.addEventListener('click', function (e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
                     const hamburger = document.getElementById('hamburgerMenu');
-                    
+
                     // Si el click no fue en el sidebar ni en el botón hamburguesa
                     if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
                         closeSidebar();
                     }
                 }
             });
-            
+
             // Prevenir scroll del body cuando sidebar está abierto
-            document.addEventListener('touchmove', function(e) {
+            document.addEventListener('touchmove', function (e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
                     if (sidebar && !sidebar.contains(e.target)) {
@@ -345,11 +524,11 @@
                 }
             });
         });
-        
+
         // Exponer funciones globalmente
         window.toggleSidebar = toggleSidebar;
         window.closeSidebar = closeSidebar;
-        
+
         console.log('✅ admin_roles.html (Administrador) - Funciones responsive cargadas');
     </script>
     <script src="/register_sw.js"></script>

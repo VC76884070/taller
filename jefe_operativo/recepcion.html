@@ -42,13 +42,11 @@
 
     <!-- ============================================= -->
     <!-- ESTILOS ADICIONALES                            -->
-    <!-- Fotos opcionales + Propietario/Tercero/Empresa -->
     <!-- ============================================= -->
     <style>
         /* =============================================
-           SECCIÓN DE FOTOS - OBLIGATORIAS Y OPCIONALES
+           SECCIÓN DE FOTOS
            ============================================= */
-
         .photo-section-title {
             display: flex;
             align-items: center;
@@ -60,11 +58,7 @@
             padding-bottom: 8px;
             border-bottom: 2px solid #2C2C2E;
         }
-
-        .photo-section-title:first-of-type {
-            margin-top: 0;
-        }
-
+        .photo-section-title:first-of-type { margin-top: 0; }
         .photo-section-title .section-badge {
             font-size: 10px;
             font-weight: 500;
@@ -73,22 +67,17 @@
             background: #2C2C2E;
             color: #8E8E93;
         }
-
         .photo-section-title .section-badge.optional {
             background: rgba(107, 114, 128, 0.2);
             color: #8E8E93;
         }
-
-        .photo-section-title i {
-            font-size: 18px;
-        }
+        .photo-section-title i { font-size: 18px; }
 
         .optional-section {
             margin-top: 30px;
             padding-top: 20px;
             border-top: 2px dashed #2C2C2E;
         }
-
         .optional-hint {
             color: #8E8E93;
             font-size: 13px;
@@ -97,10 +86,7 @@
             align-items: center;
             gap: 8px;
         }
-
-        .optional-hint i {
-            color: #6B7280;
-        }
+        .optional-hint i { color: #6B7280; }
 
         .photo-grid-optional {
             display: grid;
@@ -108,7 +94,6 @@
             gap: 15px;
             margin-bottom: 10px;
         }
-
         .photo-upload.optional {
             display: flex;
             flex-direction: column;
@@ -119,12 +104,10 @@
             padding: 10px;
             transition: all 0.3s ease;
         }
-
         .photo-upload.optional:hover {
             border-color: #6B7280;
             background: rgba(44, 44, 46, 0.4);
         }
-
         .photo-upload.optional.has-image {
             border-color: rgba(16, 185, 129, 0.3);
         }
@@ -138,13 +121,10 @@
             background: rgba(0, 0, 0, 0.3);
             cursor: pointer;
         }
-
         .photo-upload-inner .upload-placeholder {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -155,70 +135,48 @@
             z-index: 1;
             pointer-events: none;
         }
-
-        .photo-upload-inner .upload-placeholder i {
-            font-size: 32px;
-            color: #6B7280;
-        }
-
-        .photo-upload-inner .upload-placeholder span {
-            font-size: 11px;
-            font-weight: 500;
-        }
-
+        .photo-upload-inner .upload-placeholder i { font-size: 32px; color: #6B7280; }
+        .photo-upload-inner .upload-placeholder span { font-size: 11px; font-weight: 500; }
         .photo-upload-inner input[type="file"] {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             opacity: 0;
             cursor: pointer;
             z-index: 3;
         }
-
         .photo-upload-inner .upload-preview {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.2);
             border-radius: 8px;
             overflow: hidden;
             display: none;
             z-index: 2;
         }
-
         .photo-upload-inner .upload-preview img {
-            width: 100%;
-            height: 100%;
+            width: 100%; height: 100%;
             object-fit: cover;
             display: block;
         }
 
         .photo-upload-inner .progress-ring-container {
             position: absolute;
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            width: 60px;
-            height: 60px;
+            width: 60px; height: 60px;
             z-index: 6;
         }
-
         .photo-upload-inner .progress-ring-container svg {
-            width: 60px;
-            height: 60px;
+            width: 60px; height: 60px;
             transform: rotate(-90deg);
         }
-
         .photo-upload-inner .ring-bg {
             fill: none;
             stroke: rgba(255, 255, 255, 0.15);
             stroke-width: 4;
         }
-
         .photo-upload-inner .ring-fg {
             fill: none;
             stroke: #C1121F;
@@ -228,19 +186,11 @@
             stroke-dashoffset: 138.23;
             transition: stroke-dashoffset 0.3s ease, stroke 0.3s ease;
         }
-
-        .photo-upload-inner .ring-fg.completed {
-            stroke: #10B981;
-        }
-
-        .photo-upload-inner .ring-fg.error {
-            stroke: #ef4444;
-        }
-
+        .photo-upload-inner .ring-fg.completed { stroke: #10B981; }
+        .photo-upload-inner .ring-fg.error { stroke: #ef4444; }
         .photo-upload-inner .progress-percent {
             position: absolute;
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             color: white;
             font-size: 14px;
@@ -248,23 +198,13 @@
             text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
             z-index: 7;
         }
-
-        .photo-upload-inner .progress-percent.completed {
-            color: #10B981;
-            font-size: 20px;
-        }
-
-        .photo-upload-inner .progress-percent.error {
-            color: #ef4444;
-            font-size: 20px;
-        }
+        .photo-upload-inner .progress-percent.completed { color: #10B981; font-size: 20px; }
+        .photo-upload-inner .progress-percent.error { color: #ef4444; font-size: 20px; }
 
         .photo-upload-inner .status-badge-foto {
             position: absolute;
-            top: 8px;
-            right: 8px;
-            width: 28px;
-            height: 28px;
+            top: 8px; right: 8px;
+            width: 28px; height: 28px;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -274,7 +214,6 @@
             background: rgba(0, 0, 0, 0.6);
             color: #8E8E93;
         }
-
         .photo-upload-inner .status-badge-foto.pending { color: #8E8E93; }
         .photo-upload-inner .status-badge-foto.uploading { color: #f59e0b; }
         .photo-upload-inner .status-badge-foto.completed { color: #10B981; }
@@ -282,29 +221,24 @@
 
         .photo-upload-inner .progress-bar-foto {
             position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
+            bottom: 0; left: 0;
+            width: 100%; height: 4px;
             background: rgba(255, 255, 255, 0.15);
             z-index: 9;
             display: none;
         }
-
         .photo-upload-inner .progress-bar-foto .fill {
             height: 100%;
             width: 0%;
             background: #C1121F;
             transition: width 0.3s ease;
         }
-
         .photo-upload-inner .progress-bar-foto .fill.completed { background: #10B981; }
         .photo-upload-inner .progress-bar-foto .fill.error { background: #ef4444; }
 
         .photo-upload-inner .uploading-status {
             position: absolute;
-            bottom: 8px;
-            left: 50%;
+            bottom: 8px; left: 50%;
             transform: translateX(-50%);
             font-size: 10px;
             color: #fff;
@@ -316,21 +250,13 @@
             align-items: center;
             gap: 6px;
         }
-
-        .photo-upload-inner .uploading-status.uploading {
-            display: flex;
-        }
-
-        .photo-upload-inner .uploading-status i {
-            font-size: 11px;
-        }
+        .photo-upload-inner .uploading-status.uploading { display: flex; }
+        .photo-upload-inner .uploading-status i { font-size: 11px; }
 
         .photo-upload-inner .upload-preview .loading-overlay {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.7);
             display: flex;
             flex-direction: column;
@@ -340,12 +266,7 @@
             z-index: 5;
             backdrop-filter: blur(2px);
         }
-
-        .photo-upload-inner .upload-preview .loading-overlay i {
-            font-size: 30px;
-            color: #C1121F;
-        }
-
+        .photo-upload-inner .upload-preview .loading-overlay i { font-size: 30px; color: #C1121F; }
         .photo-upload-inner .upload-preview .loading-overlay span {
             color: white;
             font-size: 12px;
@@ -354,10 +275,8 @@
 
         .photo-upload-inner .remove-photo {
             position: absolute;
-            top: 6px;
-            right: 6px;
-            width: 28px;
-            height: 28px;
+            top: 6px; right: 6px;
+            width: 28px; height: 28px;
             border-radius: 50%;
             background: rgba(0, 0, 0, 0.75);
             color: #ef4444;
@@ -370,18 +289,13 @@
             font-size: 12px;
             transition: all 0.2s ease;
         }
-
         .photo-upload-inner .remove-photo:hover {
             background: #ef4444;
             color: white;
             transform: scale(1.1);
         }
 
-        .foto-comentario {
-            width: 100%;
-            padding: 0 2px;
-        }
-
+        .foto-comentario { width: 100%; padding: 0 2px; }
         .foto-comentario-input {
             width: 100%;
             padding: 8px 12px;
@@ -394,20 +308,10 @@
             transition: all 0.3s ease;
             outline: none;
         }
-
-        .foto-comentario-input::placeholder {
-            color: #6B7280;
-            font-size: 10px;
-        }
-
+        .foto-comentario-input::placeholder { color: #6B7280; font-size: 10px; }
         .foto-comentario-input:focus {
             border-color: #6B7280;
             box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.2);
-        }
-
-        .foto-comentario-input:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
         }
 
         .photo-upload.optional.has-image .photo-upload-inner .upload-placeholder { display: none; }
@@ -416,10 +320,7 @@
         .photo-upload.optional.has-image .foto-comentario-input {
             border-color: rgba(16, 185, 129, 0.3);
         }
-
-        .photo-upload.optional.error {
-            border-color: rgba(239, 68, 68, 0.5);
-        }
+        .photo-upload.optional.error { border-color: rgba(239, 68, 68, 0.5); }
         .photo-upload.optional.error .foto-comentario-input {
             border-color: rgba(239, 68, 68, 0.5);
         }
@@ -427,7 +328,6 @@
         /* =============================================
            BOTÓN DE UBICACIÓN ACTUAL
            ============================================= */
-
         .ubicacion-controls-row {
             display: flex;
             flex-wrap: wrap;
@@ -435,7 +335,6 @@
             align-items: center;
             margin-bottom: 12px;
         }
-
         .btn-ubicacion-actual {
             background: #C1121F !important;
             color: #ffffff !important;
@@ -452,28 +351,21 @@
             box-shadow: 0 2px 8px rgba(193, 18, 31, 0.3) !important;
             font-family: 'Plus Jakarta Sans', sans-serif !important;
         }
-
         .btn-ubicacion-actual:hover:not(:disabled) {
             background: #a00f1a !important;
             transform: translateY(-2px) !important;
             box-shadow: 0 4px 16px rgba(193, 18, 31, 0.4) !important;
         }
-
         .btn-ubicacion-actual:disabled {
             opacity: 0.6 !important;
             cursor: not-allowed !important;
             transform: none !important;
         }
-
         .btn-ubicacion-actual.cargando {
             background: #6b6b6b !important;
             pointer-events: none !important;
         }
-
-        .btn-ubicacion-actual.cargando i {
-            animation: spin 1s linear infinite !important;
-        }
-
+        .btn-ubicacion-actual.cargando i { animation: spin 1s linear infinite !important; }
         .btn-ubicacion-actual i { font-size: 18px !important; }
 
         .info-hint {
@@ -487,7 +379,6 @@
         /* =============================================
            BOTÓN DE TRANSCRIPCIÓN
            ============================================= */
-
         .btn-transcribir-form {
             background: linear-gradient(135deg, #7C3AED, #6D28D9) !important;
             color: white !important;
@@ -503,19 +394,16 @@
             gap: 0.5rem !important;
             box-shadow: 0 2px 12px rgba(124, 58, 237, 0.3) !important;
         }
-
         .btn-transcribir-form:hover:not(:disabled) {
             transform: translateY(-2px) !important;
             box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4) !important;
         }
-
         .btn-transcribir-form:disabled {
             opacity: 0.6 !important;
             cursor: not-allowed !important;
             transform: none !important;
             box-shadow: none !important;
         }
-
         .btn-transcribir-form i { font-size: 14px; }
 
         #transcripcionStatusForm {
@@ -528,7 +416,6 @@
             gap: 8px;
             animation: fadeIn 0.3s ease;
         }
-
         #transcripcionStatusForm i { font-size: 14px; }
         #transcripcionStatusForm.loading { color: #f59e0b; background: rgba(245, 158, 11, 0.15); }
         #transcripcionStatusForm.success { color: #10B981; background: rgba(16, 185, 129, 0.15); }
@@ -549,31 +436,26 @@
             font-weight: 600 !important;
             white-space: nowrap !important;
         }
-
         .btn-transcribir:hover {
             background: #a00e18 !important;
             transform: scale(1.02);
         }
-
         .btn-transcribir:disabled {
             opacity: 0.6 !important;
             cursor: not-allowed !important;
             transform: none !important;
         }
-
         .btn-transcribir i { font-size: 13px; }
 
         /* =============================================
            🔥 SECCIÓN DE PROPIETARIO / TERCERO / EMPRESA
            ============================================= */
-
         .propietario-switch {
             display: flex;
             gap: 12px;
             margin-bottom: 16px;
             flex-wrap: wrap;
         }
-
         .propietario-option {
             flex: 1;
             min-width: 200px;
@@ -588,25 +470,18 @@
             gap: 12px;
             user-select: none;
         }
-
         .propietario-option:hover {
             border-color: #6B7280;
             background: rgba(44, 44, 46, 0.5);
         }
-
         .propietario-option.active {
             border-color: #C1121F;
             background: rgba(193, 18, 31, 0.1);
             box-shadow: 0 0 0 3px rgba(193, 18, 31, 0.15);
         }
-
-        .propietario-option input[type="radio"] {
-            display: none;
-        }
-
+        .propietario-option input[type="radio"] { display: none; }
         .propietario-option .radio-circle {
-            width: 20px;
-            height: 20px;
+            width: 20px; height: 20px;
             border-radius: 50%;
             border: 2px solid #6B7280;
             display: flex;
@@ -615,40 +490,31 @@
             flex-shrink: 0;
             transition: all 0.3s ease;
         }
-
         .propietario-option.active .radio-circle {
             border-color: #C1121F;
             background: #C1121F;
         }
-
         .propietario-option.active .radio-circle::after {
             content: '';
-            width: 8px;
-            height: 8px;
+            width: 8px; height: 8px;
             border-radius: 50%;
             background: #fff;
         }
-
         .propietario-option .option-content {
             display: flex;
             flex-direction: column;
             gap: 2px;
         }
-
         .propietario-option .option-title {
             font-size: 14px;
             font-weight: 600;
             color: #fff;
         }
-
         .propietario-option .option-desc {
             font-size: 11px;
             color: #8E8E93;
         }
-
-        .propietario-option.active .option-title {
-            color: #C1121F;
-        }
+        .propietario-option.active .option-title { color: #C1121F; }
 
         .tercero-fields {
             display: none;
@@ -661,10 +527,7 @@
             border: 1px solid rgba(193, 18, 31, 0.15);
             animation: slideDown 0.3s ease;
         }
-
-        .tercero-fields.visible {
-            display: flex;
-        }
+        .tercero-fields.visible { display: flex; }
 
         @keyframes slideDown {
             from { opacity: 0; transform: translateY(-8px); }
@@ -682,7 +545,6 @@
             border-bottom: 1px dashed rgba(193, 18, 31, 0.2);
             margin-bottom: 4px;
         }
-
         .tercero-fields-header i { font-size: 15px; }
 
         .empresa-fields {
@@ -695,11 +557,7 @@
             border: 1px solid rgba(37, 99, 235, 0.2);
             animation: slideDown 0.3s ease;
         }
-
-        .empresa-fields.visible {
-            display: flex;
-        }
-
+        .empresa-fields.visible { display: flex; }
         .empresa-fields-header {
             display: flex;
             align-items: center;
@@ -710,7 +568,6 @@
             padding-bottom: 8px;
             border-bottom: 1px dashed rgba(37, 99, 235, 0.2);
         }
-
         .empresa-fields-header i { font-size: 14px; }
 
         .duenio-fields {
@@ -722,7 +579,6 @@
             border-radius: 10px;
             border: 1px solid rgba(16, 185, 129, 0.2);
         }
-
         .duenio-fields-header {
             display: flex;
             align-items: center;
@@ -733,7 +589,6 @@
             padding-bottom: 8px;
             border-bottom: 1px dashed rgba(16, 185, 129, 0.2);
         }
-
         .duenio-fields-header i { font-size: 14px; }
 
         .tercero-grid-2 {
@@ -752,7 +607,6 @@
             align-items: center;
             gap: 6px;
         }
-
         .tercero-fields .form-group label i,
         .empresa-fields .form-group label i,
         .duenio-fields .form-group label i {
@@ -760,7 +614,6 @@
             font-size: 12px;
             width: 16px;
         }
-
         .tercero-fields .form-group input,
         .tercero-fields .form-group select,
         .empresa-fields .form-group input,
@@ -774,7 +627,6 @@
             font-family: inherit;
             transition: all 0.3s ease;
         }
-
         .tercero-fields .form-group input:focus,
         .tercero-fields .form-group select:focus,
         .empresa-fields .form-group input:focus,
@@ -788,47 +640,36 @@
         /* =============================================
            RESPONSIVE
            ============================================= */
-
         @media (max-width: 768px) {
             .photo-grid-optional {
                 grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
                 gap: 10px;
             }
-
             .photo-section-title { font-size: 13px; flex-wrap: wrap; }
-
             .foto-comentario-input { font-size: 10px; padding: 6px 10px; }
-
             .ubicacion-controls-row { flex-direction: column; align-items: stretch; }
-
             .btn-ubicacion-actual {
                 justify-content: center;
                 padding: 12px !important;
                 font-size: 13px !important;
             }
-
             .btn-transcribir-form {
                 width: 100%;
                 justify-content: center;
                 padding: 0.8rem !important;
             }
-
             .audio-buttons { flex-direction: column; }
-
             .audio-buttons .btn-audio,
             .audio-buttons .btn-eliminar-audio,
             .audio-buttons .btn-transcribir-form {
                 width: 100%;
                 justify-content: center;
             }
-
             .detalle-card-title { flex-direction: column; align-items: flex-start; }
-
             .detalle-card-title .btn-transcribir {
                 width: 100%;
                 justify-content: center;
             }
-
             .propietario-switch { flex-direction: column; }
             .propietario-option { min-width: 100%; }
             .tercero-grid-2 { grid-template-columns: 1fr; }
@@ -840,21 +681,15 @@
             .photo-upload-inner .upload-placeholder i { font-size: 24px; }
             .photo-upload-inner .upload-placeholder span { font-size: 9px; }
             .btn-transcribir { font-size: 11px !important; padding: 8px 14px !important; }
-
             .propietario-option { padding: 12px 14px; }
             .propietario-option .option-title { font-size: 13px; }
             .tercero-fields { padding: 14px; }
         }
 
-        /* =============================================
-           ANIMACIONES
-           ============================================= */
-
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(-5px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
         @keyframes spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
@@ -863,12 +698,10 @@
 </head>
 
 <body>
-    <!-- ========== BOTÓN HAMBURGUESA PARA MÓVIL/TABLET ========== -->
     <button class="hamburger-menu" id="hamburgerMenu" aria-label="Menú">
         <i class="fas fa-bars"></i>
     </button>
 
-    <!-- ========== OVERLAY PARA CERRAR SIDEBAR ========== -->
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <div class="app">
@@ -941,7 +774,7 @@
                     </div>
                 </div>
 
-                <!-- Panel de Colaboradores en la sesión actual -->
+                <!-- Panel de Colaboradores -->
                 <div class="colaboradores-panel" id="colaboradoresPanel" style="display: none;">
                     <div class="colaboradores-header">
                         <i class="fas fa-users"></i>
@@ -967,28 +800,34 @@
                             </span>
                         </div>
                         <div class="card-body">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="clienteNombre"><i class="fas fa-user"></i> Nombre completo *</label>
-                                    <input type="text" id="clienteNombre" placeholder="Ej: Juan Pérez">
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="clienteTelefono"><i class="fas fa-phone"></i> Teléfono *</label>
-                                    <input type="tel" id="clienteTelefono" placeholder="Ej: 77712345">
-                                </div>
-                                <div class="form-group full-width">
-                                    <label for="clienteUbicacion"><i class="fas fa-map-marker-alt"></i> Ubicación</label>
-                                    <div class="ubicacion-input-group">
-                                        <input type="text" id="clienteUbicacion" placeholder="Selecciona una ubicación en el mapa..." readonly>
-                                        <button type="button" class="btn-ubicacion" id="btnAbrirModalUbicacion">
-                                            <i class="fas fa-map-pin"></i> Elegir en mapa
-                                        </button>
+
+                            <!-- ============================================= -->
+                            <!-- 🔥 CAMPOS DEL DUEÑO (solo si es dueño)        -->
+                            <!-- ============================================= -->
+                            <div id="camposClienteDueño">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="clienteNombre"><i class="fas fa-user"></i> Nombre completo *</label>
+                                        <input type="text" id="clienteNombre" placeholder="Ej: Juan Pérez">
                                     </div>
-                                    <input type="hidden" id="clienteLatitud" value="">
-                                    <input type="hidden" id="clienteLongitud" value="">
-                                    <small class="form-hint"><i class="fas fa-info-circle"></i> Haz clic en "Elegir en mapa" para seleccionar la ubicación exacta</small>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="clienteTelefono"><i class="fas fa-phone"></i> Teléfono *</label>
+                                        <input type="tel" id="clienteTelefono" placeholder="Ej: 77712345">
+                                    </div>
+                                    <div class="form-group full-width">
+                                        <label for="clienteUbicacion"><i class="fas fa-map-marker-alt"></i> Ubicación *</label>
+                                        <div class="ubicacion-input-group">
+                                            <input type="text" id="clienteUbicacion" placeholder="Selecciona una ubicación en el mapa..." readonly>
+                                            <button type="button" class="btn-ubicacion" id="btnAbrirModalUbicacion">
+                                                <i class="fas fa-map-pin"></i> Elegir en mapa
+                                            </button>
+                                        </div>
+                                        <input type="hidden" id="clienteLatitud" value="">
+                                        <input type="hidden" id="clienteLongitud" value="">
+                                        <small class="form-hint"><i class="fas fa-info-circle"></i> Haz clic en "Elegir en mapa" para seleccionar la ubicación exacta</small>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1050,6 +889,19 @@
                                         </div>
                                     </div>
 
+                                    <div class="form-group">
+                                        <label for="ubicacionTercero"><i class="fas fa-map-marker-alt"></i> Ubicación del tercero *</label>
+                                        <div class="ubicacion-input-group">
+                                            <input type="text" id="ubicacionTercero" placeholder="Selecciona una ubicación..." readonly>
+                                            <button type="button" class="btn-ubicacion" id="btnAbrirModalUbicacionTercero">
+                                                <i class="fas fa-map-pin"></i> Elegir en mapa
+                                            </button>
+                                        </div>
+                                        <input type="hidden" id="ubicacionTerceroLatitud" value="">
+                                        <input type="hidden" id="ubicacionTerceroLongitud" value="">
+                                    </div>
+
+                                    <!-- 🔥 CAMPOS DE EMPRESA (solo si es representante) -->
                                     <div class="empresa-fields" id="empresaFields">
                                         <div class="empresa-fields-header">
                                             <i class="fas fa-building"></i>
@@ -1065,9 +917,21 @@
                                                 <input type="text" id="nitEmpresa" placeholder="Ej: 123456789">
                                             </div>
                                         </div>
+                                        <div class="form-group">
+                                            <label for="ubicacionEmpresa"><i class="fas fa-map-marker-alt"></i> Ubicación de la empresa *</label>
+                                            <div class="ubicacion-input-group">
+                                                <input type="text" id="ubicacionEmpresa" placeholder="Selecciona una ubicación..." readonly>
+                                                <button type="button" class="btn-ubicacion" id="btnAbrirModalUbicacionEmpresa">
+                                                    <i class="fas fa-map-pin"></i> Elegir en mapa
+                                                </button>
+                                            </div>
+                                            <input type="hidden" id="ubicacionEmpresaLatitud" value="">
+                                            <input type="hidden" id="ubicacionEmpresaLongitud" value="">
+                                        </div>
                                     </div>
 
-                                    <div class="duenio-fields">
+                                    <!-- 🔥 DATOS DEL DUEÑO REAL (solo si NO es empresa) -->
+                                    <div class="duenio-fields" id="duenioFields">
                                         <div class="duenio-fields-header">
                                             <i class="fas fa-user-check"></i>
                                             <span>Datos del Dueño Real del Vehículo</span>
@@ -1082,12 +946,21 @@
                                                 <input type="tel" id="telefonoPropietarioReal" placeholder="Ej: 77712345">
                                             </div>
                                         </div>
+                                        <div class="form-group">
+                                            <label for="ubicacionPropietarioReal"><i class="fas fa-map-marker-alt"></i> Ubicación del dueño *</label>
+                                            <div class="ubicacion-input-group">
+                                                <input type="text" id="ubicacionPropietarioReal" placeholder="Selecciona una ubicación..." readonly>
+                                                <button type="button" class="btn-ubicacion" id="btnAbrirModalUbicacionPropietario">
+                                                    <i class="fas fa-map-pin"></i> Elegir en mapa
+                                                </button>
+                                            </div>
+                                            <input type="hidden" id="ubicacionPropietarioLatitud" value="">
+                                            <input type="hidden" id="ubicacionPropietarioLongitud" value="">
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <!-- ============================================= -->
-                            <!-- FIN SECCIÓN PROPIETARIO/TERCERO/EMPRESA       -->
-                            <!-- ============================================= -->
+                            <!-- FIN SECCIÓN PROPIETARIO/TERCERO/EMPRESA -->
 
                             <div class="form-actions-seccion">
                                 <button type="button" class="btn-guardar-seccion" data-seccion="cliente">
@@ -1162,14 +1035,14 @@
                         </div>
                         <div class="card-body">
 
-                            <!-- FOTOS OBLIGATORIAS (7) -->
+                            <!-- FOTOS OBLIGATORIAS -->
                             <div class="photo-section-title">
                                 <i class="fas fa-star" style="color: #C1121F;"></i>
                                 <span>Fotos Obligatorias (7 vistas)</span>
                                 <span class="section-badge">requeridas</span>
                             </div>
                             <div class="photo-grid" id="photoGrid">
-                                <!-- FOTO 1: LATERAL IZQUIERDO -->
+                                <!-- FOTO 1 -->
                                 <div class="photo-upload required" id="upload-fotoLateralIzq" data-campo="lateral_izquierdo">
                                     <input type="file" id="fotoLateralIzq" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -1201,7 +1074,7 @@
                                     </button>
                                 </div>
 
-                                <!-- FOTO 2: LATERAL DERECHO -->
+                                <!-- FOTO 2 -->
                                 <div class="photo-upload required" id="upload-fotoLateralDer" data-campo="lateral_derecho">
                                     <input type="file" id="fotoLateralDer" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -1233,7 +1106,7 @@
                                     </button>
                                 </div>
 
-                                <!-- FOTO 3: FRONTAL -->
+                                <!-- FOTO 3 -->
                                 <div class="photo-upload required" id="upload-fotoFrontal" data-campo="frontal">
                                     <input type="file" id="fotoFrontal" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -1265,7 +1138,7 @@
                                     </button>
                                 </div>
 
-                                <!-- FOTO 4: TRASERA -->
+                                <!-- FOTO 4 -->
                                 <div class="photo-upload required" id="upload-fotoTrasera" data-campo="trasera">
                                     <input type="file" id="fotoTrasera" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -1297,7 +1170,7 @@
                                     </button>
                                 </div>
 
-                                <!-- FOTO 5: SUPERIOR -->
+                                <!-- FOTO 5 -->
                                 <div class="photo-upload required" id="upload-fotoSuperior" data-campo="superior">
                                     <input type="file" id="fotoSuperior" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -1329,7 +1202,7 @@
                                     </button>
                                 </div>
 
-                                <!-- FOTO 6: INFERIOR -->
+                                <!-- FOTO 6 -->
                                 <div class="photo-upload required" id="upload-fotoInferior" data-campo="inferior">
                                     <input type="file" id="fotoInferior" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -1361,7 +1234,7 @@
                                     </button>
                                 </div>
 
-                                <!-- FOTO 7: TABLERO -->
+                                <!-- FOTO 7 -->
                                 <div class="photo-upload required" id="upload-fotoTablero" data-campo="tablero">
                                     <input type="file" id="fotoTablero" accept="image/*" capture="environment">
                                     <div class="upload-placeholder">
@@ -1394,7 +1267,7 @@
                                 </div>
                             </div>
 
-                            <!-- FOTOS OPCIONALES (10) CON COMENTARIO -->
+                            <!-- FOTOS OPCIONALES -->
                             <div class="photo-section-title optional-section">
                                 <i class="fas fa-plus-circle" style="color: #6B7280;"></i>
                                 <span>Fotos Adicionales (Opcionales)</span>
@@ -1405,7 +1278,6 @@
                             </p>
 
                             <div class="photo-grid photo-grid-optional" id="photoGridOptional">
-
                                 <!-- FOTO OPCIONAL 1 -->
                                 <div class="photo-upload optional" id="upload-fotoOpcional1" data-campo="opcional1">
                                     <div class="photo-upload-inner">
@@ -1775,7 +1647,6 @@
                                             placeholder="📝 Descripción del detalle (ej: Detalle del interior...)" maxlength="200">
                                     </div>
                                 </div>
-
                             </div>
 
                             <p class="photo-hint">* Las imágenes se comprimirán automáticamente (máx 1.2MB)</p>
@@ -1912,7 +1783,6 @@
     <!-- MODALES -->
     <!-- ===================================================== -->
 
-    <!-- Modal para unirse por código -->
     <div class="modal" id="modalUnirsePorCodigo">
         <div class="modal-content">
             <div class="modal-header">
@@ -1933,7 +1803,6 @@
         </div>
     </div>
 
-    <!-- Modal de código generado (sesión creada) -->
     <div class="modal" id="codigoModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1951,7 +1820,6 @@
         </div>
     </div>
 
-    <!-- Modal de orden finalizada -->
     <div class="modal" id="codigoOrdenModal">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
@@ -1976,7 +1844,6 @@
         </div>
     </div>
 
-    <!-- Modal para ver detalles de recepción -->
     <div class="modal modal-detalle" id="modalDetalleRecepcion">
         <div class="modal-content modal-detalle-content">
             <div class="modal-header">
@@ -1984,7 +1851,6 @@
                 <button class="modal-close" onclick="cerrarModalDetalle()">&times;</button>
             </div>
             <div class="modal-body" id="detalleRecepcionBody">
-                <!-- El contenido se genera dinámicamente desde recepcion.js -->
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModalDetalle()"><i class="fas fa-times"></i> Cerrar</button>
@@ -1993,7 +1859,6 @@
         </div>
     </div>
 
-    <!-- Modal para confirmar eliminación -->
     <div class="modal" id="modalConfirmarEliminar">
         <div class="modal-content">
             <div class="modal-header">
@@ -2012,7 +1877,6 @@
         </div>
     </div>
 
-    <!-- Modal para seleccionar ubicación con Leaflet -->
     <div class="modal" id="modalUbicacionLeaflet">
         <div class="modal-content modal-ubicacion">
             <div class="modal-header">
@@ -2056,9 +1920,7 @@
         </div>
     </div>
 
-    <!-- ===================================================== -->
-    <!-- BARRA DE PROGRESO PARA OPERACIONES -->
-    <!-- ===================================================== -->
+    <!-- BARRA DE PROGRESO -->
     <div class="progress-overlay" id="progressOverlay">
         <div class="progress-container">
             <div class="progress-icon" id="progressIcon">
@@ -2087,24 +1949,13 @@
         </div>
     </div>
 
-    <!-- ===================================================== -->
     <!-- SCRIPTS -->
-    <!-- ===================================================== -->
-
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-
-    <!-- Sidebar include -->
     <script src="/jefe_operativo/js/include.js"></script>
-
-    <!-- COMPRESOR DE IMÁGENES -->
     <script src="/jefe_operativo/js/imageCompressor.js"></script>
-
-    <!-- RECEPCION.JS -->
     <script src="/jefe_operativo/js/recepcion.js"></script>
 
-    <!-- Sidebar responsive -->
     <script>
         let sidebarOpen = false;
 

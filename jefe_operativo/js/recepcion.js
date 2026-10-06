@@ -1296,29 +1296,50 @@ async function guardarSeccion(seccion) {
     
     switch(seccion) {
         case 'cliente':
-            // 🔥 NUEVOS CAMPOS: propietario / tercero / empresa
-            const tipoProp = document.getElementById('tipoPropietarioRadio')?.checked 
-                ? 'propietario' 
-                : 'tercero';
-            const esTercero = tipoProp === 'tercero';
+            const esPropietario = document.getElementById('tipoPropietarioRadio')?.checked ?? true;
+            const esTercero = !esPropietario;
+            const tipoTercero = esTercero ? (document.getElementById('tipoTercero')?.value || null) : null;
+            const esEmpresa = esTercero && tipoTercero === 'representante_empresa';
             
-            datos = {
+            // 🔥 Base de datos: si es tercero, "cliente" representa al tercero
+            const clienteBase = esTercero ? {
+                nombre: document.getElementById('nombreTercero')?.value || '',
+                telefono: document.getElementById('telefonoTercero')?.value || '',
+                ubicacion: document.getElementById('ubicacionTercero')?.value || '',
+                latitud: document.getElementById('ubicacionTerceroLatitud')?.value || null,
+                longitud: document.getElementById('ubicacionTerceroLongitud')?.value || null,
+            } : {
                 nombre: document.getElementById('clienteNombre')?.value || '',
                 telefono: document.getElementById('clienteTelefono')?.value || '',
                 ubicacion: document.getElementById('clienteUbicacion')?.value || '',
                 latitud: document.getElementById('clienteLatitud')?.value || null,
                 longitud: document.getElementById('clienteLongitud')?.value || null,
+            };
+            
+            datos = {
+                ...clienteBase,
                 
-                // 🔥 CAMPOS DE PROPIETARIO/TERCERO
+                // Campos de propietario/tercero
                 es_propietario: !esTercero,
-                tipo_tercero: esTercero ? (document.getElementById('tipoTercero')?.value || null) : null,
-                nombre_tercero: esTercero ? (document.getElementById('nombreTercero')?.value || null) : null,
-                telefono_tercero: esTercero ? (document.getElementById('telefonoTercero')?.value || null) : null,
-                es_empresa: esTercero && (document.getElementById('tipoTercero')?.value === 'representante_empresa'),
-                nombre_empresa: esTercero ? (document.getElementById('nombreEmpresa')?.value || null) : null,
-                nit_empresa: esTercero ? (document.getElementById('nitEmpresa')?.value || null) : null,
-                nombre_propietario_real: esTercero ? (document.getElementById('nombrePropietarioReal')?.value || null) : null,
-                telefono_propietario_real: esTercero ? (document.getElementById('telefonoPropietarioReal')?.value || null) : null
+                tipo_tercero: tipoTercero,
+                nombre_tercero: esTercero ? clienteBase.nombre : null,
+                telefono_tercero: esTercero ? clienteBase.telefono : null,
+                ubicacion_tercero: esTercero ? clienteBase.ubicacion : null,
+                
+                // Empresa
+                es_empresa: esEmpresa,
+                nombre_empresa: esEmpresa ? (document.getElementById('nombreEmpresa')?.value || null) : null,
+                nit_empresa: esEmpresa ? (document.getElementById('nitEmpresa')?.value || null) : null,
+                ubicacion_empresa: esEmpresa ? (document.getElementById('ubicacionEmpresa')?.value || null) : null,
+                ubicacion_empresa_latitud: esEmpresa ? (document.getElementById('ubicacionEmpresaLatitud')?.value || null) : null,
+                ubicacion_empresa_longitud: esEmpresa ? (document.getElementById('ubicacionEmpresaLongitud')?.value || null) : null,
+                
+                // Dueño real (solo tercero no empresa)
+                nombre_propietario_real: (esTercero && !esEmpresa) ? (document.getElementById('nombrePropietarioReal')?.value || null) : null,
+                telefono_propietario_real: (esTercero && !esEmpresa) ? (document.getElementById('telefonoPropietarioReal')?.value || null) : null,
+                ubicacion_propietario_real: (esTercero && !esEmpresa) ? (document.getElementById('ubicacionPropietarioReal')?.value || null) : null,
+                ubicacion_propietario_latitud: (esTercero && !esEmpresa) ? (document.getElementById('ubicacionPropietarioLatitud')?.value || null) : null,
+                ubicacion_propietario_longitud: (esTercero && !esEmpresa) ? (document.getElementById('ubicacionPropietarioLongitud')?.value || null) : null,
             };
             break;
         case 'vehiculo':
@@ -1353,8 +1374,6 @@ async function guardarSeccion(seccion) {
                 fotos: fotosData,
                 comentarios: comentariosData
             };
-            
-            console.log(`📸 Guardando ${Object.keys(fotosData).length} fotos en sesión`);
             break;
         case 'descripcion':
             datos = { 
@@ -1662,32 +1681,42 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
 }
 
 function validarCompletadoCliente() {
-    const nombre = document.getElementById('clienteNombre')?.value?.trim();
-    const telefono = document.getElementById('clienteTelefono')?.value?.trim();
-    const ubicacion = document.getElementById('clienteUbicacion')?.value?.trim();
-    
-    // 🔥 Verificar si es propietario o tercero
-    const esPropietario = document.getElementById('tipoPropietarioRadio')?.checked || true;
+    const esPropietario = document.getElementById('tipoPropietarioRadio')?.checked ?? true;
     const esTercero = !esPropietario;
     
-    let completada = !!(nombre && telefono && ubicacion);
+    let completada = false;
     
-    // Si es tercero, validar campos adicionales
-    if (esTercero) {
+    if (!esTercero) {
+        // 🔥 ES DUEÑO: validar campos originales
+        const nombre = document.getElementById('clienteNombre')?.value?.trim();
+        const telefono = document.getElementById('clienteTelefono')?.value?.trim();
+        const ubicacion = document.getElementById('clienteUbicacion')?.value?.trim();
+        
+        completada = !!(nombre && telefono && ubicacion);
+        
+    } else {
+        // 🔥 ES TERCERO: validar campos del tercero
         const tipoTercero = document.getElementById('tipoTercero')?.value;
         const nombreTercero = document.getElementById('nombreTercero')?.value?.trim();
         const telefonoTercero = document.getElementById('telefonoTercero')?.value?.trim();
-        const nombrePropietarioReal = document.getElementById('nombrePropietarioReal')?.value?.trim();
-        const telefonoPropietarioReal = document.getElementById('telefonoPropietarioReal')?.value?.trim();
+        const ubicacionTercero = document.getElementById('ubicacionTercero')?.value?.trim();
         
-        completada = completada && 
-            !!(tipoTercero && nombreTercero && telefonoTercero && 
-               nombrePropietarioReal && telefonoPropietarioReal);
+        completada = !!(tipoTercero && nombreTercero && telefonoTercero && ubicacionTercero);
         
-        // Si es representante de empresa, validar empresa
+        // Si es representante de empresa → validar empresa
         if (tipoTercero === 'representante_empresa') {
             const nombreEmpresa = document.getElementById('nombreEmpresa')?.value?.trim();
-            completada = completada && !!nombreEmpresa;
+            const ubicacionEmpresa = document.getElementById('ubicacionEmpresa')?.value?.trim();
+            
+            completada = completada && !!(nombreEmpresa && ubicacionEmpresa);
+            
+        } else {
+            // Si es tercero normal → validar dueño real
+            const nombrePropietarioReal = document.getElementById('nombrePropietarioReal')?.value?.trim();
+            const telefonoPropietarioReal = document.getElementById('telefonoPropietarioReal')?.value?.trim();
+            const ubicacionPropietarioReal = document.getElementById('ubicacionPropietarioReal')?.value?.trim();
+            
+            completada = completada && !!(nombrePropietarioReal && telefonoPropietarioReal && ubicacionPropietarioReal);
         }
     }
     
@@ -5330,13 +5359,50 @@ function abrirModalLeaflet() {
 function cerrarModalLeaflet() { document.getElementById('modalUbicacionLeaflet')?.classList.remove('show'); }
 
 function confirmarUbicacionLeaflet() {
-    if (!ubicacionTemporal.texto || !ubicacionTemporal.lat) { mostrarNotificacion('Selecciona una ubicación en el mapa', 'warning'); return; }
-    clienteUbicacionInput.value = ubicacionTemporal.texto;
-    clienteLatitudInput.value = ubicacionTemporal.lat;
-    clienteLongitudInput.value = ubicacionTemporal.lng;
+    if (!ubicacionTemporal.texto || !ubicacionTemporal.lat) {
+        mostrarNotificacion('Selecciona una ubicación en el mapa', 'warning');
+        return;
+    }
+    
+    const target = mapaActualTarget || 'cliente';
+    
+    if (target === 'cliente') {
+        clienteUbicacionInput.value = ubicacionTemporal.texto;
+        clienteLatitudInput.value = ubicacionTemporal.lat;
+        clienteLongitudInput.value = ubicacionTemporal.lng;
+    } else if (target === 'tercero') {
+        const input = document.getElementById('ubicacionTercero');
+        const lat = document.getElementById('ubicacionTerceroLatitud');
+        const lng = document.getElementById('ubicacionTerceroLongitud');
+        if (input) input.value = ubicacionTemporal.texto;
+        if (lat) lat.value = ubicacionTemporal.lat;
+        if (lng) lng.value = ubicacionTemporal.lng;
+    } else if (target === 'empresa') {
+        const input = document.getElementById('ubicacionEmpresa');
+        const lat = document.getElementById('ubicacionEmpresaLatitud');
+        const lng = document.getElementById('ubicacionEmpresaLongitud');
+        if (input) input.value = ubicacionTemporal.texto;
+        if (lat) lat.value = ubicacionTemporal.lat;
+        if (lng) lng.value = ubicacionTemporal.lng;
+    } else if (target === 'propietario') {
+        const input = document.getElementById('ubicacionPropietarioReal');
+        const lat = document.getElementById('ubicacionPropietarioLatitud');
+        const lng = document.getElementById('ubicacionPropietarioLongitud');
+        if (input) input.value = ubicacionTemporal.texto;
+        if (lat) lat.value = ubicacionTemporal.lat;
+        if (lng) lng.value = ubicacionTemporal.lng;
+    }
+    
     cerrarModalLeaflet();
     validarCompletadoCliente();
-    if (codigoSesion) { guardarSeccion('cliente'); mostrarNotificacion('Ubicación guardada', 'success'); }
+    
+    // Resetear target
+    mapaActualTarget = 'cliente';
+    
+    if (codigoSesion) {
+        guardarSeccion('cliente');
+        mostrarNotificacion('Ubicación guardada', 'success');
+    }
 }
 // =====================================================
 // OBTENER UBICACIÓN ACTUAL (GEOLOCALIZACIÓN)
@@ -5423,16 +5489,30 @@ function setupBotonUbicacionActual() {
 }
 function setupModalUbicacionLeaflet() {
     if (!btnAbrirModalUbicacion) return;
-    btnAbrirModalUbicacion.addEventListener('click', abrirModalLeaflet);
+    
+    // 🔥 Botón del cliente (dueño)
+    btnAbrirModalUbicacion.addEventListener('click', () => {
+        mapaActualTarget = 'cliente';
+        abrirModalLeafletGenerico(
+            clienteUbicacionInput?.value || '',
+            clienteLatitudInput?.value,
+            clienteLongitudInput?.value
+        );
+    });
+    
     document.getElementById('btnCerrarModalUbicacionLeaflet')?.addEventListener('click', cerrarModalLeaflet);
     document.getElementById('btnCancelarUbicacionLeaflet')?.addEventListener('click', cerrarModalLeaflet);
     document.getElementById('btnConfirmarUbicacionLeaflet')?.addEventListener('click', confirmarUbicacionLeaflet);
     document.getElementById('btnBuscarUbicacionLeaflet')?.addEventListener('click', buscarYMostrarLeaflet);
-    document.getElementById('modalBuscarUbicacionLeaflet')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') buscarYMostrarLeaflet(); });
-    document.getElementById('modalUbicacionLeaflet')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) cerrarModalLeaflet(); });
+    document.getElementById('modalBuscarUbicacionLeaflet')?.addEventListener('keypress', (e) => { 
+        if (e.key === 'Enter') buscarYMostrarLeaflet(); 
+    });
+    document.getElementById('modalUbicacionLeaflet')?.addEventListener('click', (e) => { 
+        if (e.target === e.currentTarget) cerrarModalLeaflet(); 
+    });
     
-    // 🔥 AGREGAR ESTA LÍNEA - Configurar botón de ubicación actual
     setupBotonUbicacionActual();
+    setupMapasAdicionales();  // 🔥 NUEVO
 }
 
 async function buscarYMostrarLeaflet() {
@@ -5799,15 +5879,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupUnirsePorCodigo();
     setupModalUbicacionLeaflet();
     initProgressElements();
-    setupTipoPropietario();          // 🔥 PRIMERO
-    await recuperarSesionActiva();   // 🔥 DESPUÉS (recupera datos)
+    setupTipoPropietario();
+    await recuperarSesionActiva();
     iniciarPollingSesiones();
     initRecepcionesPanel();
     setupTranscripcionFormulario();
 });
-// =====================================================
-// 🔥 CONFIGURAR LÓGICA DE PROPIETARIO / TERCERO / EMPRESA
-// =====================================================
 
 function setupTipoPropietario() {
     const radioPropietario = document.getElementById('tipoPropietarioRadio');
@@ -5817,15 +5894,21 @@ function setupTipoPropietario() {
     const terceroFields = document.getElementById('terceroFields');
     const tipoTerceroSelect = document.getElementById('tipoTercero');
     const empresaFields = document.getElementById('empresaFields');
+    const duenioFields = document.getElementById('duenioFields');
+    const camposClienteDueno = document.getElementById('camposClienteDueño');
     
     if (!radioPropietario || !radioTercero) {
         console.warn('⚠️ No se encontraron los radios de propietario/tercero');
         return;
     }
     
-    // Función interna para actualizar UI
     function actualizarUI() {
         const esTercero = radioTercero.checked;
+        
+        // 🔥 OCULTAR/MOSTRAR campos del dueño original
+        if (camposClienteDueno) {
+            camposClienteDueno.style.display = esTercero ? 'none' : 'block';
+        }
         
         // Actualizar clases de las opciones
         if (esTercero) {
@@ -5838,34 +5921,40 @@ function setupTipoPropietario() {
             terceroFields?.classList.remove('visible');
         }
         
-        // Actualizar campos de empresa según tipo de tercero
+        // 🔥 Lógica de empresa vs dueño real
         if (tipoTerceroSelect) {
             const esRepresentante = tipoTerceroSelect.value === 'representante_empresa';
-            if (esRepresentante && esTercero) {
+            
+            if (esTercero && esRepresentante) {
+                // Es empresa → mostrar empresa, ocultar dueño real
                 empresaFields?.classList.add('visible');
-            } else {
+                if (duenioFields) duenioFields.style.display = 'none';
+            } else if (esTercero) {
+                // Es tercero normal → mostrar dueño real, ocultar empresa
                 empresaFields?.classList.remove('visible');
+                if (duenioFields) duenioFields.style.display = 'flex';
+            } else {
+                // Es dueño → ocultar ambos
+                empresaFields?.classList.remove('visible');
+                if (duenioFields) duenioFields.style.display = 'none';
             }
         }
         
-        // Revalidar cliente
         validarCompletadoCliente();
     }
     
-    // Event listeners para los radios
     radioPropietario.addEventListener('change', actualizarUI);
     radioTercero.addEventListener('change', actualizarUI);
     
-    // Event listener para el select de tipo de tercero
     if (tipoTerceroSelect) {
         tipoTerceroSelect.addEventListener('change', actualizarUI);
     }
     
-    // Validaciones en vivo para los campos del tercero
+    // Validaciones en vivo
     const camposTercero = [
-        'nombreTercero', 'telefonoTercero', 
-        'nombrePropietarioReal', 'telefonoPropietarioReal',
-        'nombreEmpresa', 'nitEmpresa'
+        'nombreTercero', 'telefonoTercero', 'ubicacionTercero',
+        'nombrePropietarioReal', 'telefonoPropietarioReal', 'ubicacionPropietarioReal',
+        'nombreEmpresa', 'nitEmpresa', 'ubicacionEmpresa'
     ];
     
     camposTercero.forEach(id => {
@@ -5875,9 +5964,7 @@ function setupTipoPropietario() {
         }
     });
     
-    // Estado inicial
     actualizarUI();
-    
     console.log('✅ Setup propietario/tercero configurado');
 }
 
@@ -5892,12 +5979,11 @@ function cargarDatosPropietario(datosCliente) {
     const radioTercero = document.getElementById('tipoTerceroRadio');
     const tipoTerceroSelect = document.getElementById('tipoTercero');
     const empresaFields = document.getElementById('empresaFields');
+    const duenioFields = document.getElementById('duenioFields');
     
-    // Determinar si es propietario o tercero
     const esPropietario = datosCliente.es_propietario !== false;
     const esTercero = !esPropietario;
     
-    // Marcar el radio correspondiente
     if (esTercero) {
         if (radioTercero) radioTercero.checked = true;
         if (radioPropietario) radioPropietario.checked = false;
@@ -5906,7 +5992,6 @@ function cargarDatosPropietario(datosCliente) {
         if (radioTercero) radioTercero.checked = false;
     }
     
-    // Cargar tipo de tercero
     if (esTercero) {
         if (tipoTerceroSelect && datosCliente.tipo_tercero) {
             tipoTerceroSelect.value = datosCliente.tipo_tercero;
@@ -5919,56 +6004,190 @@ function cargarDatosPropietario(datosCliente) {
         if (document.getElementById('telefonoTercero')) {
             document.getElementById('telefonoTercero').value = datosCliente.telefono_tercero || '';
         }
+        if (document.getElementById('ubicacionTercero')) {
+            document.getElementById('ubicacionTercero').value = datosCliente.ubicacion_tercero || datosCliente.ubicacion || '';
+        }
+        if (document.getElementById('ubicacionTerceroLatitud')) {
+            document.getElementById('ubicacionTerceroLatitud').value = datosCliente.latitud || '';
+        }
+        if (document.getElementById('ubicacionTerceroLongitud')) {
+            document.getElementById('ubicacionTerceroLongitud').value = datosCliente.longitud || '';
+        }
         
-        // Cargar campos de empresa si aplica
+        // Empresa
         const esEmpresa = datosCliente.es_empresa === true;
-        if (esEmpresa && empresaFields) {
-            empresaFields.classList.add('visible');
-        }
-        
-        if (document.getElementById('nombreEmpresa')) {
-            document.getElementById('nombreEmpresa').value = datosCliente.nombre_empresa || '';
-        }
-        if (document.getElementById('nitEmpresa')) {
-            document.getElementById('nitEmpresa').value = datosCliente.nit_empresa || '';
-        }
-        
-        // Cargar campos del dueño real
-        if (document.getElementById('nombrePropietarioReal')) {
-            document.getElementById('nombrePropietarioReal').value = datosCliente.nombre_propietario_real || '';
-        }
-        if (document.getElementById('telefonoPropietarioReal')) {
-            document.getElementById('telefonoPropietarioReal').value = datosCliente.telefono_propietario_real || '';
+        if (esEmpresa) {
+            empresaFields?.classList.add('visible');
+            if (duenioFields) duenioFields.style.display = 'none';
+            
+            if (document.getElementById('nombreEmpresa')) {
+                document.getElementById('nombreEmpresa').value = datosCliente.nombre_empresa || '';
+            }
+            if (document.getElementById('nitEmpresa')) {
+                document.getElementById('nitEmpresa').value = datosCliente.nit_empresa || '';
+            }
+            if (document.getElementById('ubicacionEmpresa')) {
+                document.getElementById('ubicacionEmpresa').value = datosCliente.ubicacion_empresa || '';
+            }
+            if (document.getElementById('ubicacionEmpresaLatitud')) {
+                document.getElementById('ubicacionEmpresaLatitud').value = datosCliente.ubicacion_empresa_latitud || '';
+            }
+            if (document.getElementById('ubicacionEmpresaLongitud')) {
+                document.getElementById('ubicacionEmpresaLongitud').value = datosCliente.ubicacion_empresa_longitud || '';
+            }
+        } else {
+            empresaFields?.classList.remove('visible');
+            if (duenioFields) duenioFields.style.display = 'flex';
+            
+            if (document.getElementById('nombrePropietarioReal')) {
+                document.getElementById('nombrePropietarioReal').value = datosCliente.nombre_propietario_real || '';
+            }
+            if (document.getElementById('telefonoPropietarioReal')) {
+                document.getElementById('telefonoPropietarioReal').value = datosCliente.telefono_propietario_real || '';
+            }
+            if (document.getElementById('ubicacionPropietarioReal')) {
+                document.getElementById('ubicacionPropietarioReal').value = datosCliente.ubicacion_propietario_real || '';
+            }
+            if (document.getElementById('ubicacionPropietarioLatitud')) {
+                document.getElementById('ubicacionPropietarioLatitud').value = datosCliente.ubicacion_propietario_latitud || '';
+            }
+            if (document.getElementById('ubicacionPropietarioLongitud')) {
+                document.getElementById('ubicacionPropietarioLongitud').value = datosCliente.ubicacion_propietario_longitud || '';
+            }
         }
     }
     
-    // Trigger cambio en el radio para actualizar UI
+    // Trigger cambio para actualizar UI
     if (radioTercero) {
         radioTercero.dispatchEvent(new Event('change'));
+    } else if (radioPropietario) {
+        radioPropietario.dispatchEvent(new Event('change'));
     }
 }
-
 // =====================================================
 // 🔥 OBTENER DATOS DE PROPIETARIO PARA ENVIAR AL BACKEND
 // =====================================================
 
 function obtenerDatosPropietario() {
-    const esPropietario = document.getElementById('tipoPropietarioRadio')?.checked || true;
+    const esPropietario = document.getElementById('tipoPropietarioRadio')?.checked ?? true;
     const esTercero = !esPropietario;
+    const tipoTercero = esTercero ? (document.getElementById('tipoTercero')?.value || null) : null;
+    const esEmpresa = esTercero && tipoTercero === 'representante_empresa';
+    
+    if (!esTercero) {
+        return {
+            es_propietario: true,
+            tipo_tercero: null,
+            nombre_tercero: null,
+            telefono_tercero: null,
+            ubicacion_tercero: null,
+            es_empresa: false,
+            nombre_empresa: null,
+            nit_empresa: null,
+            ubicacion_empresa: null,
+            ubicacion_empresa_latitud: null,
+            ubicacion_empresa_longitud: null,
+            nombre_propietario_real: null,
+            telefono_propietario_real: null,
+            ubicacion_propietario_real: null,
+            ubicacion_propietario_latitud: null,
+            ubicacion_propietario_longitud: null
+        };
+    }
     
     return {
-        es_propietario: esPropietario,
-        tipo_tercero: esTercero ? (document.getElementById('tipoTercero')?.value || null) : null,
-        nombre_tercero: esTercero ? (document.getElementById('nombreTercero')?.value || null) : null,
-        telefono_tercero: esTercero ? (document.getElementById('telefonoTercero')?.value || null) : null,
-        es_empresa: esTercero && (document.getElementById('tipoTercero')?.value === 'representante_empresa'),
-        nombre_empresa: esTercero ? (document.getElementById('nombreEmpresa')?.value || null) : null,
-        nit_empresa: esTercero ? (document.getElementById('nitEmpresa')?.value || null) : null,
-        nombre_propietario_real: esTercero ? (document.getElementById('nombrePropietarioReal')?.value || null) : null,
-        telefono_propietario_real: esTercero ? (document.getElementById('telefonoPropietarioReal')?.value || null) : null
+        es_propietario: false,
+        tipo_tercero: tipoTercero,
+        nombre_tercero: document.getElementById('nombreTercero')?.value || null,
+        telefono_tercero: document.getElementById('telefonoTercero')?.value || null,
+        ubicacion_tercero: document.getElementById('ubicacionTercero')?.value || null,
+        es_empresa: esEmpresa,
+        nombre_empresa: esEmpresa ? (document.getElementById('nombreEmpresa')?.value || null) : null,
+        nit_empresa: esEmpresa ? (document.getElementById('nitEmpresa')?.value || null) : null,
+        ubicacion_empresa: esEmpresa ? (document.getElementById('ubicacionEmpresa')?.value || null) : null,
+        ubicacion_empresa_latitud: esEmpresa ? (document.getElementById('ubicacionEmpresaLatitud')?.value || null) : null,
+        ubicacion_empresa_longitud: esEmpresa ? (document.getElementById('ubicacionEmpresaLongitud')?.value || null) : null,
+        nombre_propietario_real: !esEmpresa ? (document.getElementById('nombrePropietarioReal')?.value || null) : null,
+        telefono_propietario_real: !esEmpresa ? (document.getElementById('telefonoPropietarioReal')?.value || null) : null,
+        ubicacion_propietario_real: !esEmpresa ? (document.getElementById('ubicacionPropietarioReal')?.value || null) : null,
+        ubicacion_propietario_latitud: !esEmpresa ? (document.getElementById('ubicacionPropietarioLatitud')?.value || null) : null,
+        ubicacion_propietario_longitud: !esEmpresa ? (document.getElementById('ubicacionPropietarioLongitud')?.value || null) : null
     };
 }
+// =====================================================
+// 🔥 CONFIGURAR MAPAS ADICIONALES (TERCERO / EMPRESA / DUEÑO)
+// =====================================================
 
+let mapaActualTarget = 'cliente'; // 'cliente' | 'tercero' | 'empresa' | 'propietario'
+
+function setupMapasAdicionales() {
+    document.getElementById('btnAbrirModalUbicacionTercero')?.addEventListener('click', () => {
+        mapaActualTarget = 'tercero';
+        abrirModalLeafletGenerico(
+            document.getElementById('ubicacionTercero')?.value || '',
+            document.getElementById('ubicacionTerceroLatitud')?.value,
+            document.getElementById('ubicacionTerceroLongitud')?.value
+        );
+    });
+    
+    document.getElementById('btnAbrirModalUbicacionEmpresa')?.addEventListener('click', () => {
+        mapaActualTarget = 'empresa';
+        abrirModalLeafletGenerico(
+            document.getElementById('ubicacionEmpresa')?.value || '',
+            document.getElementById('ubicacionEmpresaLatitud')?.value,
+            document.getElementById('ubicacionEmpresaLongitud')?.value
+        );
+    });
+    
+    document.getElementById('btnAbrirModalUbicacionPropietario')?.addEventListener('click', () => {
+        mapaActualTarget = 'propietario';
+        abrirModalLeafletGenerico(
+            document.getElementById('ubicacionPropietarioReal')?.value || '',
+            document.getElementById('ubicacionPropietarioLatitud')?.value,
+            document.getElementById('ubicacionPropietarioLongitud')?.value
+        );
+    });
+    
+    console.log('✅ Mapas adicionales configurados');
+}
+
+function abrirModalLeafletGenerico(textoActual, latActual, lngActual) {
+    const modal = document.getElementById('modalUbicacionLeaflet');
+    if (!modal) return;
+    
+    ubicacionTemporal = { 
+        texto: textoActual || '', 
+        lat: latActual ? parseFloat(latActual) : null, 
+        lng: lngActual ? parseFloat(lngActual) : null 
+    };
+    
+    const infoDiv = document.getElementById('ubicacionInfoLeaflet');
+    const btnConfirmar = document.getElementById('btnConfirmarUbicacionLeaflet');
+    
+    if (ubicacionTemporal.texto) {
+        if (infoDiv) infoDiv.style.display = 'block';
+        const textoSpan = document.getElementById('ubicacionSeleccionadaTextoLeaflet');
+        if (textoSpan) textoSpan.textContent = ubicacionTemporal.texto;
+        if (btnConfirmar) btnConfirmar.disabled = false;
+    } else {
+        if (infoDiv) infoDiv.style.display = 'none';
+        if (btnConfirmar) btnConfirmar.disabled = true;
+    }
+    
+    if (!leafletInicializado) initLeafletMap();
+    
+    setTimeout(() => {
+        if (mapCliente) {
+            mapCliente.invalidateSize();
+            if (ubicacionTemporal.lat && ubicacionTemporal.lng) {
+                mapCliente.setView([ubicacionTemporal.lat, ubicacionTemporal.lng], 15);
+                markerCliente.setLatLng([ubicacionTemporal.lat, ubicacionTemporal.lng]);
+            }
+        }
+    }, 100);
+    
+    modal.classList.add('show');
+}
 // =====================================================
 // FUNCIONES GLOBALES
 // =====================================================

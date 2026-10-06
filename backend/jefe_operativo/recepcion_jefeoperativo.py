@@ -680,9 +680,13 @@ def guardar_seccion(current_user):
                 'nombre_empresa': datos_seccion.get('nombre_empresa'),
                 'nit_empresa': datos_seccion.get('nit_empresa'),
                 'ubicacion_empresa': datos_seccion.get('ubicacion_empresa'),
+                'ubicacion_empresa_latitud': datos_seccion.get('ubicacion_empresa_latitud'),
+                'ubicacion_empresa_longitud': datos_seccion.get('ubicacion_empresa_longitud'),
                 'nombre_propietario_real': datos_seccion.get('nombre_propietario_real'),
                 'telefono_propietario_real': datos_seccion.get('telefono_propietario_real'),
-                'ubicacion_propietario_real': datos_seccion.get('ubicacion_propietario_real')
+                'ubicacion_propietario_real': datos_seccion.get('ubicacion_propietario_real'),
+                'ubicacion_propietario_latitud': datos_seccion.get('ubicacion_propietario_latitud'),
+                'ubicacion_propietario_longitud': datos_seccion.get('ubicacion_propietario_longitud')
             }
             
             # 🔥 VALIDAR SEGÚN EL TIPO (propietario / tercero / empresa)
@@ -733,8 +737,13 @@ def guardar_seccion(current_user):
                 'anio': datos_seccion.get('anio'),
                 'kilometraje': datos_seccion.get('kilometraje', 0)
             }
+            # 🔥 AHORA REQUIERE LOS 5 CAMPOS
             sesion['secciones_completadas']['vehiculo'] = bool(
-                datos_seccion.get('placa') and datos_seccion.get('marca') and datos_seccion.get('modelo')
+                datos_seccion.get('placa') and 
+                datos_seccion.get('marca') and 
+                datos_seccion.get('modelo') and
+                datos_seccion.get('anio') and
+                datos_seccion.get('kilometraje')
             )
             
         elif seccion == 'fotos':
@@ -763,9 +772,13 @@ def guardar_seccion(current_user):
                         sesion['datos']['comentarios'][campo] = valor.strip()
                         print(f"📝 Guardando comentario: {campo} -> {valor}")
             
+            # 🔥 CORRECCIÓN: CONTAR SOLO LAS 7 OBLIGATORIAS
             fotos = sesion['datos']['fotos']
             campos_obligatorios = ['lateral_izquierdo', 'lateral_derecho', 'frontal', 'trasera', 'superior', 'inferior', 'tablero']
-            fotos_validas = sum(1 for c in campos_obligatorios if fotos.get(c) and fotos.get(c) != 'null' and fotos.get(c) != '')
+            fotos_validas = sum(
+                1 for c in campos_obligatorios 
+                if fotos.get(c) and fotos.get(c) != 'null' and fotos.get(c) != ''
+            )
             sesion['secciones_completadas']['fotos'] = fotos_validas == 7
             
             print(f"📸 Total fotos en sesión: {len(fotos)}")
@@ -931,6 +944,7 @@ def finalizar_sesion(current_user):
                 cliente_data.get('telefono') and 
                 cliente_data.get('ubicacion')
             )
+            logger.info(f"👤 Validación cliente (dueño): completo={cliente_completo}")
         else:
             # ✅ Es tercero → validar campos del tercero
             cliente_completo = bool(
@@ -945,6 +959,7 @@ def finalizar_sesion(current_user):
                     cliente_data.get('nombre_empresa') and
                     cliente_data.get('ubicacion_empresa')
                 )
+                logger.info(f"👤 Validación cliente (empresa): tercero={cliente_data.get('nombre_tercero')}, empresa={cliente_data.get('nombre_empresa')}, completo={cliente_completo}")
             else:
                 # ✅ Es tercero normal → validar dueño real
                 cliente_completo = cliente_completo and bool(
@@ -952,9 +967,9 @@ def finalizar_sesion(current_user):
                     cliente_data.get('telefono_propietario_real') and
                     cliente_data.get('ubicacion_propietario_real')
                 )
+                logger.info(f"👤 Validación cliente (tercero): tercero={cliente_data.get('nombre_tercero')}, dueño={cliente_data.get('nombre_propietario_real')}, completo={cliente_completo}")
         
         sesion['secciones_completadas']['cliente'] = cliente_completo
-        logger.info(f"👤 Validación cliente: es_propietario={es_propietario}, es_empresa={es_empresa}, completo={cliente_completo}")
         
         vehiculo_data = sesion['datos'].get('vehiculo', {})
         vehiculo_completo = bool(
@@ -1686,18 +1701,24 @@ def actualizar_foto_sesion(current_user):
         sesion['datos']['fotos'][campo_db] = url
         logger.info(f"📸 Foto actualizada en sesión: {campo_db} -> {url[:50]}...")
         
-        # Recalcular completado
+        # 🔥 CORRECCIÓN: CONTAR SOLO LAS 7 OBLIGATORIAS
+        campos_obligatorios = [
+            'url_lateral_izquierda', 'url_lateral_derecha', 'url_foto_frontal',
+            'url_foto_trasera', 'url_foto_superior', 'url_foto_inferior', 'url_foto_tablero'
+        ]
         fotos = sesion['datos']['fotos']
-        fotos_validas = sum(1 for v in fotos.values() if v and v != 'null' and v != '' and v != 'undefined')
+        fotos_validas = sum(
+            1 for c in campos_obligatorios 
+            if fotos.get(c) and fotos.get(c) != 'null' and fotos.get(c) != '' and fotos.get(c) != 'undefined'
+        )
         fotos_completas = fotos_validas == 7
         
         if 'secciones_completadas' not in sesion:
             sesion['secciones_completadas'] = {}
         sesion['secciones_completadas']['fotos'] = fotos_completas
         
-        logger.info(f"📸 Fotos válidas: {fotos_validas}/7 - Completado: {fotos_completas}")
+        logger.info(f"📸 Fotos obligatorias válidas: {fotos_validas}/7 - Completado: {fotos_completas}")
         
-        # Guardar en BD
         guardar_sesion_en_db(sesion)
         
         return jsonify({
@@ -2947,27 +2968,41 @@ def actualizar_recepcion(current_user, id_orden):
         latitud = cliente_data.get('latitud')
         longitud = cliente_data.get('longitud')
         
-        # 🔥 NUEVOS CAMPOS DE PROPIETARIO/TERCERO
+        # 🔥 CAMPOS DE PROPIETARIO/TERCERO
         es_propietario = cliente_data.get('es_propietario', True)
         tipo_tercero = cliente_data.get('tipo_tercero')
         nombre_tercero = cliente_data.get('nombre_tercero')
         telefono_tercero = cliente_data.get('telefono_tercero')
+        ubicacion_tercero = cliente_data.get('ubicacion_tercero')
         es_empresa = cliente_data.get('es_empresa', False)
         nombre_empresa = cliente_data.get('nombre_empresa')
         nit_empresa = cliente_data.get('nit_empresa')
+        ubicacion_empresa = cliente_data.get('ubicacion_empresa')
+        ubicacion_empresa_latitud = cliente_data.get('ubicacion_empresa_latitud')
+        ubicacion_empresa_longitud = cliente_data.get('ubicacion_empresa_longitud')
         nombre_propietario_real = cliente_data.get('nombre_propietario_real')
         telefono_propietario_real = cliente_data.get('telefono_propietario_real')
+        ubicacion_propietario_real = cliente_data.get('ubicacion_propietario_real')
+        ubicacion_propietario_latitud = cliente_data.get('ubicacion_propietario_latitud')
+        ubicacion_propietario_longitud = cliente_data.get('ubicacion_propietario_longitud')
         
         datos_propietario = {
             'es_propietario': es_propietario,
             'tipo_tercero': tipo_tercero,
             'nombre_tercero': nombre_tercero,
             'telefono_tercero': telefono_tercero,
+            'ubicacion_tercero': ubicacion_tercero,
             'es_empresa': es_empresa,
             'nombre_empresa': nombre_empresa,
             'nit_empresa': nit_empresa,
+            'ubicacion_empresa': ubicacion_empresa,
+            'ubicacion_empresa_latitud': ubicacion_empresa_latitud,
+            'ubicacion_empresa_longitud': ubicacion_empresa_longitud,
             'nombre_propietario_real': nombre_propietario_real,
-            'telefono_propietario_real': telefono_propietario_real
+            'telefono_propietario_real': telefono_propietario_real,
+            'ubicacion_propietario_real': ubicacion_propietario_real,
+            'ubicacion_propietario_latitud': ubicacion_propietario_latitud,
+            'ubicacion_propietario_longitud': ubicacion_propietario_longitud
         }
         
         vehiculo_data = data.get('vehiculo', {})
@@ -2983,6 +3018,8 @@ def actualizar_recepcion(current_user, id_orden):
         descripcion = data.get('descripcion', {})
         texto_descripcion = descripcion.get('texto', '')
         audio_url = descripcion.get('audio_url')
+        
+        comentarios_frontend = data.get('comentarios', {})
         
         # 3. VERIFICAR/ACTUALIZAR CLIENTE
         vehiculo_actual = supabase.table('vehiculo') \
@@ -3137,6 +3174,47 @@ def actualizar_recepcion(current_user, id_orden):
                 .insert(recepcion_update) \
                 .execute()
             logger.info(f"✅ Recepción creada para orden {id_orden}")
+        
+        # =============================================
+        # 7. GUARDAR FOTOS OPCIONALES Y COMENTARIOS EN SESIÓN
+        # =============================================
+        try:
+            # Buscar la sesión finalizada por codigo_orden
+            sesiones_result = supabase.table('sesion_colaborativa') \
+                .select('codigo, datos') \
+                .eq('estado', 'finalizada') \
+                .execute()
+            
+            for s in (sesiones_result.data or []):
+                datos_sesion = s.get('datos', {})
+                if datos_sesion.get('codigo_orden') == codigo_unico:
+                    # Actualizar fotos opcionales y comentarios
+                    datos_actualizados = datos_sesion.copy()
+                    
+                    if 'fotos' not in datos_actualizados:
+                        datos_actualizados['fotos'] = {}
+                    
+                    # Agregar fotos opcionales
+                    for key, value in fotos_frontend.items():
+                        if key.startswith('opcional') and value:
+                            datos_actualizados['fotos'][key] = value
+                    
+                    # Actualizar comentarios
+                    if comentarios_frontend:
+                        datos_actualizados['comentarios'] = comentarios_frontend
+                    
+                    supabase.table('sesion_colaborativa') \
+                        .update({
+                            'datos': datos_actualizados,
+                            'comentarios': comentarios_frontend if comentarios_frontend else {}
+                        }) \
+                        .eq('codigo', s['codigo']) \
+                        .execute()
+                    
+                    logger.info(f"✅ Sesión {s['codigo']} actualizada con fotos opcionales y comentarios")
+                    break
+        except Exception as e:
+            logger.error(f"❌ Error actualizando sesión colaborativa: {e}")
         
         fotos_guardadas = sum(1 for v in recepcion_update.values() 
                              if v and v != 'null' and v != '' and v != 'undefined' 

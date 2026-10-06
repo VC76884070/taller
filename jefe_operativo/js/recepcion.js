@@ -571,6 +571,7 @@ async function reemplazarFotoEnDrive(file, campo, urlAnterior) {
 // =====================================================
 // ACTUALIZAR FOTO EN SESIÓN
 // =====================================================
+
 async function actualizarSesionFoto(campo, url) {
     try {
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/actualizar-foto-sesion`, {
@@ -583,9 +584,14 @@ async function actualizarSesionFoto(campo, url) {
             actualizarEstadoVisualSeccion('fotos', true);
             actualizarBotonFinalizar();
         }
-    } catch (error) {}
+        // 🔥 SIEMPRE validar localmente también
+        setTimeout(() => validarCompletadoFotos(), 200);
+    } catch (error) {
+        console.warn('⚠️ Error actualizando sesión foto:', error);
+        // 🔥 VALIDAR LOCALMENTE AUNQUE FALLE EL BACKEND
+        setTimeout(() => validarCompletadoFotos(), 200);
+    }
 }
-
 // =====================================================
 // COMPRIMIR IMAGEN
 // =====================================================
@@ -1290,12 +1296,17 @@ function validarCompletadoFotos() {
 
 // En recepcion.js - Función guardarSeccion (CORREGIDA)
 
+// =====================================================
+// GUARDAR SECCIÓN EN EL BACKEND
+// =====================================================
+
 async function guardarSeccion(seccion) {
     if (!codigoSesion) return;
     let datos = {};
     
     switch(seccion) {
         case 'cliente':
+            // 🔥 GUARDAR CAMPOS SEGÚN PROPIETARIO/TERCERO/EMPRESA
             const esPropietario = document.getElementById('tipoPropietarioRadio')?.checked ?? true;
             const esTercero = !esPropietario;
             const tipoTercero = esTercero ? (document.getElementById('tipoTercero')?.value || null) : null;
@@ -1680,43 +1691,60 @@ async function subirAudioGoogleDrive(audioBlob, carpeta) {
     });
 }
 
+// =====================================================
+// VALIDAR CLIENTE COMPLETO (PROPIETARIO / TERCERO / EMPRESA)
+// =====================================================
+
 function validarCompletadoCliente() {
     const esPropietario = document.getElementById('tipoPropietarioRadio')?.checked ?? true;
     const esTercero = !esPropietario;
+    const tipoTercero = document.getElementById('tipoTercero')?.value;
+    const esEmpresa = esTercero && tipoTercero === 'representante_empresa';
     
     let completada = false;
     
     if (!esTercero) {
-        // 🔥 ES DUEÑO: validar campos originales
+        // =========================================
+        // CASO 1: ES DUEÑO → validar campos normales
+        // =========================================
         const nombre = document.getElementById('clienteNombre')?.value?.trim();
         const telefono = document.getElementById('clienteTelefono')?.value?.trim();
         const ubicacion = document.getElementById('clienteUbicacion')?.value?.trim();
         
         completada = !!(nombre && telefono && ubicacion);
+        console.log('👤 Validar cliente (DUEÑO):', { nombre: !!nombre, telefono: !!telefono, ubicacion: !!ubicacion, completada });
         
     } else {
-        // 🔥 ES TERCERO: validar campos del tercero
-        const tipoTercero = document.getElementById('tipoTercero')?.value;
+        // =========================================
+        // CASO 2: ES TERCERO → validar campos del tercero
+        // =========================================
         const nombreTercero = document.getElementById('nombreTercero')?.value?.trim();
         const telefonoTercero = document.getElementById('telefonoTercero')?.value?.trim();
         const ubicacionTercero = document.getElementById('ubicacionTercero')?.value?.trim();
         
-        completada = !!(tipoTercero && nombreTercero && telefonoTercero && ubicacionTercero);
+        completada = !!(nombreTercero && telefonoTercero && ubicacionTercero);
+        console.log('👤 Validar cliente (TERCERO):', { nombreTercero: !!nombreTercero, telefonoTercero: !!telefonoTercero, ubicacionTercero: !!ubicacionTercero, completada });
         
-        // Si es representante de empresa → validar empresa
-        if (tipoTercero === 'representante_empresa') {
+        if (esEmpresa) {
+            // =========================================
+            // CASO 2a: TERCERO + EMPRESA
+            // =========================================
             const nombreEmpresa = document.getElementById('nombreEmpresa')?.value?.trim();
             const ubicacionEmpresa = document.getElementById('ubicacionEmpresa')?.value?.trim();
             
             completada = completada && !!(nombreEmpresa && ubicacionEmpresa);
+            console.log('👤 Validar cliente (EMPRESA):', { nombreEmpresa: !!nombreEmpresa, ubicacionEmpresa: !!ubicacionEmpresa, completada });
             
         } else {
-            // Si es tercero normal → validar dueño real
+            // =========================================
+            // CASO 2b: TERCERO NORMAL → validar dueño real
+            // =========================================
             const nombrePropietarioReal = document.getElementById('nombrePropietarioReal')?.value?.trim();
             const telefonoPropietarioReal = document.getElementById('telefonoPropietarioReal')?.value?.trim();
             const ubicacionPropietarioReal = document.getElementById('ubicacionPropietarioReal')?.value?.trim();
             
             completada = completada && !!(nombrePropietarioReal && telefonoPropietarioReal && ubicacionPropietarioReal);
+            console.log('👤 Validar cliente (DUEÑO REAL):', { nombrePropietarioReal: !!nombrePropietarioReal, telefonoPropietarioReal: !!telefonoPropietarioReal, ubicacionPropietarioReal: !!ubicacionPropietarioReal, completada });
         }
     }
     
@@ -1973,6 +2001,10 @@ async function recuperarSesionActiva() {
 // FUNCIÓN COMPLETA: FINALIZAR SESIÓN CON REPORTE
 // =====================================================
 
+// =====================================================
+// FUNCIÓN COMPLETA: FINALIZAR SESIÓN CON REPORTE
+// =====================================================
+
 async function finalizarSesionConReporte() {
     if (!codigoSesion) {
         mostrarNotificacion('⚠️ No hay sesión activa', 'warning');
@@ -2102,36 +2134,91 @@ async function finalizarSesionConReporte() {
         updateProgressBar(30);
         updateProgressMessage('Validando datos...');
         
-        // Validar cliente (con propietario/tercero)
-        const clienteNombre = document.getElementById('clienteNombre')?.value?.trim() || '';
-        const clienteTelefono = document.getElementById('clienteTelefono')?.value?.trim() || '';
-        const clienteUbicacion = document.getElementById('clienteUbicacion')?.value?.trim() || '';
-        
-        // 🔥 VALIDACIÓN CON PROPIETARIO/TERCERO
+        // =========================================
+        // 🔥 VALIDACIÓN DEL CLIENTE (PROPIETARIO / TERCERO / EMPRESA)
+        // =========================================
         const esPropietario = document.getElementById('tipoPropietarioRadio')?.checked ?? true;
         const esTercero = !esPropietario;
-        
-        let clienteCompleto = !!(clienteNombre && clienteTelefono && clienteUbicacion);
-        
-        if (esTercero) {
-            const tipoTercero = document.getElementById('tipoTercero')?.value;
-            const nombreTercero = document.getElementById('nombreTercero')?.value?.trim();
-            const telefonoTercero = document.getElementById('telefonoTercero')?.value?.trim();
-            const nombrePropietarioReal = document.getElementById('nombrePropietarioReal')?.value?.trim();
-            const telefonoPropietarioReal = document.getElementById('telefonoPropietarioReal')?.value?.trim();
+        const tipoTercero = document.getElementById('tipoTercero')?.value;
+        const esEmpresa = esTercero && tipoTercero === 'representante_empresa';
+
+        let clienteCompleto = false;
+        let datosClienteFinales = {};
+
+        if (!esTercero) {
+            // =========================================
+            // CASO 1: ES DUEÑO → validar campos normales
+            // =========================================
+            const clienteNombre = document.getElementById('clienteNombre')?.value?.trim() || '';
+            const clienteTelefono = document.getElementById('clienteTelefono')?.value?.trim() || '';
+            const clienteUbicacion = document.getElementById('clienteUbicacion')?.value?.trim() || '';
             
-            clienteCompleto = clienteCompleto && 
-                !!(tipoTercero && nombreTercero && telefonoTercero && 
-                   nombrePropietarioReal && telefonoPropietarioReal);
+            clienteCompleto = !!(clienteNombre && clienteTelefono && clienteUbicacion);
             
-            if (tipoTercero === 'representante_empresa') {
-                const nombreEmpresa = document.getElementById('nombreEmpresa')?.value?.trim();
-                clienteCompleto = clienteCompleto && !!nombreEmpresa;
+            datosClienteFinales = {
+                nombre: clienteNombre,
+                telefono: clienteTelefono,
+                ubicacion: clienteUbicacion,
+                latitud: document.getElementById('clienteLatitud')?.value || null,
+                longitud: document.getElementById('clienteLongitud')?.value || null
+            };
+            
+            console.log('👤 Validación DUEÑO:', { clienteNombre, clienteTelefono, clienteUbicacion, clienteCompleto });
+            
+        } else {
+            // =========================================
+            // CASO 2: ES TERCERO → validar campos del tercero
+            // =========================================
+            const nombreTercero = document.getElementById('nombreTercero')?.value?.trim() || '';
+            const telefonoTercero = document.getElementById('telefonoTercero')?.value?.trim() || '';
+            const ubicacionTercero = document.getElementById('ubicacionTercero')?.value?.trim() || '';
+            
+            clienteCompleto = !!(nombreTercero && telefonoTercero && ubicacionTercero);
+            
+            datosClienteFinales = {
+                nombre: nombreTercero,
+                telefono: telefonoTercero,
+                ubicacion: ubicacionTercero,
+                latitud: document.getElementById('ubicacionTerceroLatitud')?.value || null,
+                longitud: document.getElementById('ubicacionTerceroLongitud')?.value || null
+            };
+            
+            console.log('👤 Validación TERCERO:', { nombreTercero, telefonoTercero, ubicacionTercero, clienteCompleto });
+            
+            if (esEmpresa) {
+                // =========================================
+                // CASO 2a: TERCERO + EMPRESA
+                // =========================================
+                const nombreEmpresa = document.getElementById('nombreEmpresa')?.value?.trim() || '';
+                const ubicacionEmpresa = document.getElementById('ubicacionEmpresa')?.value?.trim() || '';
+                
+                clienteCompleto = clienteCompleto && !!(nombreEmpresa && ubicacionEmpresa);
+                
+                console.log('👤 Validación EMPRESA:', { nombreEmpresa, ubicacionEmpresa, clienteCompleto });
+                
+            } else {
+                // =========================================
+                // CASO 2b: TERCERO NORMAL → validar dueño real
+                // =========================================
+                const nombrePropietarioReal = document.getElementById('nombrePropietarioReal')?.value?.trim() || '';
+                const telefonoPropietarioReal = document.getElementById('telefonoPropietarioReal')?.value?.trim() || '';
+                const ubicacionPropietarioReal = document.getElementById('ubicacionPropietarioReal')?.value?.trim() || '';
+                
+                clienteCompleto = clienteCompleto && !!(nombrePropietarioReal && telefonoPropietarioReal && ubicacionPropietarioReal);
+                
+                console.log('👤 Validación DUEÑO REAL:', { nombrePropietarioReal, telefonoPropietarioReal, ubicacionPropietarioReal, clienteCompleto });
             }
         }
-        
+
+        // 🔥 AGREGAR DATOS DE PROPIETARIO/TERCERO/EMPRESA AL OBJETO FINAL
+        datosClienteFinales = {
+            ...datosClienteFinales,
+            ...obtenerDatosPropietario()
+        };
+
         seccionesCompletadasLocal.cliente = clienteCompleto;
         actualizarEstadoVisualSeccion('cliente', seccionesCompletadasLocal.cliente);
+        console.log(`👤 Cliente completo: ${clienteCompleto}`);
         
         // Validar vehículo
         const placa = document.getElementById('vehiculoPlaca')?.value?.trim() || '';
@@ -2239,18 +2326,9 @@ async function finalizarSesionConReporte() {
             }
         }
         
-        // 🔥 CONSTRUIR OBJETO FINAL CON DATOS DE PROPIETARIO
+        // 🔥 CONSTRUIR OBJETO FINAL CON DATOS CORRECTOS
         const datosFinales = {
-            cliente: {
-                nombre: clienteNombre,
-                telefono: clienteTelefono,
-                ubicacion: document.getElementById('clienteUbicacion')?.value || '',
-                latitud: document.getElementById('clienteLatitud')?.value || null,
-                longitud: document.getElementById('clienteLongitud')?.value || null,
-                
-                // 🔥 NUEVOS CAMPOS DE PROPIETARIO/TERCERO
-                ...obtenerDatosPropietario()
-            },
+            cliente: datosClienteFinales,
             vehiculo: {
                 placa: placa.toUpperCase(),
                 marca: marca,
@@ -5886,6 +5964,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupTranscripcionFormulario();
 });
 
+// =====================================================
+// CONFIGURAR TIPO DE PROPIETARIO/TERCERO/EMPRESA
+// =====================================================
+
 function setupTipoPropietario() {
     const radioPropietario = document.getElementById('tipoPropietarioRadio');
     const radioTercero = document.getElementById('tipoTerceroRadio');
@@ -5904,6 +5986,12 @@ function setupTipoPropietario() {
     
     function actualizarUI() {
         const esTercero = radioTercero.checked;
+        
+        // 🔥 ACTUALIZAR TÍTULO DINÁMICAMENTE
+        const headerTitle = document.querySelector('[data-seccion="cliente"] .card-header h2');
+        if (headerTitle) {
+            headerTitle.textContent = esTercero ? 'Datos del Tercero' : 'Datos del Cliente';
+        }
         
         // 🔥 OCULTAR/MOSTRAR campos del dueño original
         if (camposClienteDueno) {
@@ -6064,6 +6152,10 @@ function cargarDatosPropietario(datosCliente) {
         radioPropietario.dispatchEvent(new Event('change'));
     }
 }
+// =====================================================
+// 🔥 OBTENER DATOS DE PROPIETARIO PARA ENVIAR AL BACKEND
+// =====================================================
+
 // =====================================================
 // 🔥 OBTENER DATOS DE PROPIETARIO PARA ENVIAR AL BACKEND
 // =====================================================

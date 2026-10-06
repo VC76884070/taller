@@ -5798,10 +5798,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupInputTracking();
     setupUnirsePorCodigo();
     setupModalUbicacionLeaflet();
-    initProgressModelo?.(); // si existe
     initProgressElements();
-    setupTipoPropietario(); // 🔥 AGREGAR ESTA LÍNEA
-    await recuperarSesionActiva();
+    setupTipoPropietario();          // 🔥 PRIMERO
+    await recuperarSesionActiva();   // 🔥 DESPUÉS (recupera datos)
     iniciarPollingSesiones();
     initRecepcionesPanel();
     setupTranscripcionFormulario();

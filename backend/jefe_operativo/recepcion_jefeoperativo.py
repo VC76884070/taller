@@ -670,41 +670,57 @@ def guardar_seccion(current_user):
                 'ubicacion': datos_seccion.get('ubicacion', ''),
                 'latitud': datos_seccion.get('latitud'),
                 'longitud': datos_seccion.get('longitud'),
-                # 🔥 NUEVOS CAMPOS
+                # 🔥 NUEVOS CAMPOS DE PROPIETARIO/TERCERO
                 'es_propietario': datos_seccion.get('es_propietario', True),
                 'tipo_tercero': datos_seccion.get('tipo_tercero'),
                 'nombre_tercero': datos_seccion.get('nombre_tercero'),
                 'telefono_tercero': datos_seccion.get('telefono_tercero'),
+                'ubicacion_tercero': datos_seccion.get('ubicacion_tercero'),
                 'es_empresa': datos_seccion.get('es_empresa', False),
                 'nombre_empresa': datos_seccion.get('nombre_empresa'),
                 'nit_empresa': datos_seccion.get('nit_empresa'),
+                'ubicacion_empresa': datos_seccion.get('ubicacion_empresa'),
                 'nombre_propietario_real': datos_seccion.get('nombre_propietario_real'),
-                'telefono_propietario_real': datos_seccion.get('telefono_propietario_real')
+                'telefono_propietario_real': datos_seccion.get('telefono_propietario_real'),
+                'ubicacion_propietario_real': datos_seccion.get('ubicacion_propietario_real')
             }
             
-            # Validar cliente completo
+            # 🔥 VALIDAR SEGÚN EL TIPO (propietario / tercero / empresa)
             es_propietario = datos_seccion.get('es_propietario', True)
-            cliente_completo = bool(
-                datos_seccion.get('nombre') and 
-                datos_seccion.get('telefono') and 
-                datos_seccion.get('ubicacion')
-            )
+            tipo_tercero = datos_seccion.get('tipo_tercero')
+            es_empresa = datos_seccion.get('es_empresa', False)
             
-            # Si es tercero, validar campos adicionales
-            if not es_propietario:
-                cliente_completo = cliente_completo and bool(
-                    datos_seccion.get('tipo_tercero') and
+            if es_propietario:
+                # ✅ Es dueño → validar campos normales
+                cliente_completo = bool(
+                    datos_seccion.get('nombre') and 
+                    datos_seccion.get('telefono') and 
+                    datos_seccion.get('ubicacion')
+                )
+                logger.info(f"👤 Cliente (dueño): nombre={datos_seccion.get('nombre')}, completo={cliente_completo}")
+            else:
+                # ✅ Es tercero → validar campos del tercero
+                cliente_completo = bool(
                     datos_seccion.get('nombre_tercero') and
                     datos_seccion.get('telefono_tercero') and
-                    datos_seccion.get('nombre_propietario_real') and
-                    datos_seccion.get('telefono_propietario_real')
+                    datos_seccion.get('ubicacion_tercero')
                 )
                 
-                # Si es representante de empresa, validar empresa
-                if datos_seccion.get('tipo_tercero') == 'representante_empresa':
+                if es_empresa:
+                    # ✅ Es representante de empresa → validar empresa
                     cliente_completo = cliente_completo and bool(
-                        datos_seccion.get('nombre_empresa')
+                        datos_seccion.get('nombre_empresa') and
+                        datos_seccion.get('ubicacion_empresa')
                     )
+                    logger.info(f"👤 Cliente (empresa): tercero={datos_seccion.get('nombre_tercero')}, empresa={datos_seccion.get('nombre_empresa')}, completo={cliente_completo}")
+                else:
+                    # ✅ Es tercero normal → validar dueño real
+                    cliente_completo = cliente_completo and bool(
+                        datos_seccion.get('nombre_propietario_real') and
+                        datos_seccion.get('telefono_propietario_real') and
+                        datos_seccion.get('ubicacion_propietario_real')
+                    )
+                    logger.info(f"👤 Cliente (tercero): tercero={datos_seccion.get('nombre_tercero')}, dueño={datos_seccion.get('nombre_propietario_real')}, completo={cliente_completo}")
             
             sesion['secciones_completadas']['cliente'] = cliente_completo
             logger.info(f"👤 Cliente guardado: es_propietario={es_propietario}, completo={cliente_completo}")
@@ -727,7 +743,6 @@ def guardar_seccion(current_user):
             if 'fotos' not in sesion['datos']:
                 sesion['datos']['fotos'] = {}
             
-            # Guardar TODAS las fotos (obligatorias + opcionales)
             if 'fotos' in datos_seccion:
                 fotos_data = datos_seccion.get('fotos', {})
                 for campo, valor in fotos_data.items():
@@ -740,7 +755,6 @@ def guardar_seccion(current_user):
                         sesion['datos']['fotos'][campo] = valor
                         print(f"📸 Guardando foto: {campo} -> {valor[:50]}...")
             
-            # Guardar comentarios de fotos opcionales
             if 'comentarios' in datos_seccion:
                 if 'comentarios' not in sesion['datos']:
                     sesion['datos']['comentarios'] = {}
@@ -749,7 +763,6 @@ def guardar_seccion(current_user):
                         sesion['datos']['comentarios'][campo] = valor.strip()
                         print(f"📝 Guardando comentario: {campo} -> {valor}")
             
-            # Recalcular completado (solo obligatorias)
             fotos = sesion['datos']['fotos']
             campos_obligatorios = ['lateral_izquierdo', 'lateral_derecho', 'frontal', 'trasera', 'superior', 'inferior', 'tablero']
             fotos_validas = sum(1 for c in campos_obligatorios if fotos.get(c) and fotos.get(c) != 'null' and fotos.get(c) != '')
@@ -837,7 +850,7 @@ def finalizar_sesion(current_user):
         logger.info(f"📋 Finalizando sesión: {codigo_sesion}")
         
         # =============================================
-        # 1. CARGAR SESIÓN (memoria o BD)
+        # 1. CARGAR SESIÓN
         # =============================================
         if codigo_sesion not in sesiones_activas:
             sesion = cargar_sesion_de_db(codigo_sesion)
@@ -854,15 +867,12 @@ def finalizar_sesion(current_user):
         # 2. ACTUALIZAR SESIÓN CON DATOS DEL FRONTEND
         # =============================================
         if datos_frontend:
-            # Cliente
             if 'cliente' in datos_frontend:
                 sesion['datos']['cliente'] = datos_frontend['cliente']
             
-            # Vehículo
             if 'vehiculo' in datos_frontend:
                 sesion['datos']['vehiculo'] = datos_frontend['vehiculo']
             
-            # 🔥 FOTOS OBLIGATORIAS
             if 'fotos' in datos_frontend:
                 fotos_frontend = datos_frontend['fotos']
                 if 'fotos' not in sesion['datos']:
@@ -883,20 +893,14 @@ def finalizar_sesion(current_user):
                 sesion['secciones_completadas']['fotos'] = fotos_validas == 7
                 logger.info(f"📸 Fotos obligatorias válidas: {fotos_validas}/7")
             
-            # 🔥 FOTOS OPCIONALES
             fotos_opcionales = datos_frontend.get('fotos_opcionales', {})
             if fotos_opcionales:
                 if 'fotos' not in sesion['datos']:
                     sesion['datos']['fotos'] = {}
-                
                 for campo, url in fotos_opcionales.items():
                     if url and url != 'null' and url != '' and url != 'undefined' and url != 'None':
                         sesion['datos']['fotos'][campo] = url
-                        logger.info(f"📸 Foto opcional guardada: {campo} -> {url[:50]}...")
-                
-                logger.info(f"📸 Total fotos opcionales guardadas: {len(fotos_opcionales)}")
             
-            # 🔥 COMENTARIOS DE FOTOS OPCIONALES
             comentarios = datos_frontend.get('comentarios', {})
             if comentarios:
                 if 'comentarios' not in sesion['datos']:
@@ -904,28 +908,53 @@ def finalizar_sesion(current_user):
                 for campo, valor in comentarios.items():
                     if valor and valor.strip():
                         sesion['datos']['comentarios'][campo] = valor.strip()
-                        logger.info(f"📝 Comentario guardado: {campo} -> {valor}")
             
-            # Descripción
             if 'descripcion' in datos_frontend:
                 sesion['datos']['descripcion'] = datos_frontend['descripcion']
                 if datos_frontend['descripcion'].get('texto') and datos_frontend['descripcion'].get('audio_url'):
                     sesion['secciones_completadas']['descripcion'] = True
             
-            # Guardar sesión actualizada en memoria y BD
             guardar_sesion_en_db(sesion)
             sesiones_activas[codigo_sesion] = sesion
         
         # =============================================
-        # 3. RECALCULAR SECCIONES COMPLETADAS
+        # 3. RECALCULAR SECCIONES COMPLETADAS CON LÓGICA DE PROPIETARIO/TERCERO
         # =============================================
         cliente_data = sesion['datos'].get('cliente', {})
-        cliente_completo = bool(
-            cliente_data.get('nombre') and 
-            cliente_data.get('telefono') and 
-            cliente_data.get('ubicacion')
-        )
+        es_propietario = cliente_data.get('es_propietario', True)
+        es_empresa = cliente_data.get('es_empresa', False)
+        
+        if es_propietario:
+            # ✅ Es dueño → validar campos normales
+            cliente_completo = bool(
+                cliente_data.get('nombre') and 
+                cliente_data.get('telefono') and 
+                cliente_data.get('ubicacion')
+            )
+        else:
+            # ✅ Es tercero → validar campos del tercero
+            cliente_completo = bool(
+                cliente_data.get('nombre_tercero') and
+                cliente_data.get('telefono_tercero') and
+                cliente_data.get('ubicacion_tercero')
+            )
+            
+            if es_empresa:
+                # ✅ Es empresa → validar empresa
+                cliente_completo = cliente_completo and bool(
+                    cliente_data.get('nombre_empresa') and
+                    cliente_data.get('ubicacion_empresa')
+                )
+            else:
+                # ✅ Es tercero normal → validar dueño real
+                cliente_completo = cliente_completo and bool(
+                    cliente_data.get('nombre_propietario_real') and
+                    cliente_data.get('telefono_propietario_real') and
+                    cliente_data.get('ubicacion_propietario_real')
+                )
+        
         sesion['secciones_completadas']['cliente'] = cliente_completo
+        logger.info(f"👤 Validación cliente: es_propietario={es_propietario}, es_empresa={es_empresa}, completo={cliente_completo}")
         
         vehiculo_data = sesion['datos'].get('vehiculo', {})
         vehiculo_completo = bool(
@@ -969,51 +998,63 @@ def finalizar_sesion(current_user):
             fotos = sesion['datos'].get('fotos', {})
             comentarios = sesion['datos'].get('comentarios', {})
             
-            logger.info(f"📸 Total fotos en sesión al finalizar: {len(fotos)}")
-            logger.info(f"📸 Fotos: {list(fotos.keys())}")
-            
             # ---------------------------------------------
             # 5.1 Obtener o crear cliente
             # ---------------------------------------------
             id_cliente = None
             id_usuario = None
             
-            telefono = cliente_data.get('telefono', '')
-            nombre = cliente_data.get('nombre', '')
-            ubicacion = cliente_data.get('ubicacion', '')
-            latitud = cliente_data.get('latitud')
-            longitud = cliente_data.get('longitud')
-            
-            # 🔥 NUEVOS CAMPOS DE PROPIETARIO/TERCERO
+            # 🔥 EXTRAER CAMPOS DE PROPIETARIO/TERCERO
             es_propietario = cliente_data.get('es_propietario', True)
             tipo_tercero = cliente_data.get('tipo_tercero')
             nombre_tercero = cliente_data.get('nombre_tercero')
             telefono_tercero = cliente_data.get('telefono_tercero')
+            ubicacion_tercero = cliente_data.get('ubicacion_tercero')
             es_empresa = cliente_data.get('es_empresa', False)
             nombre_empresa = cliente_data.get('nombre_empresa')
             nit_empresa = cliente_data.get('nit_empresa')
+            ubicacion_empresa = cliente_data.get('ubicacion_empresa')
             nombre_propietario_real = cliente_data.get('nombre_propietario_real')
             telefono_propietario_real = cliente_data.get('telefono_propietario_real')
+            ubicacion_propietario_real = cliente_data.get('ubicacion_propietario_real')
             
+            # 🔥 SI ES TERCERO, LOS DATOS PRINCIPALES DEL USUARIO SON DEL TERCERO
+            if not es_propietario:
+                telefono = telefono_tercero or ''
+                nombre = nombre_tercero or ''
+                ubicacion = ubicacion_tercero or ''
+                latitud = cliente_data.get('latitud')
+                longitud = cliente_data.get('longitud')
+            else:
+                telefono = cliente_data.get('telefono', '')
+                nombre = cliente_data.get('nombre', '')
+                ubicacion = cliente_data.get('ubicacion', '')
+                latitud = cliente_data.get('latitud')
+                longitud = cliente_data.get('longitud')
+            
+            # 🔥 Datos extra para guardar en cliente
             datos_propietario = {
                 'es_propietario': es_propietario,
                 'tipo_tercero': tipo_tercero,
                 'nombre_tercero': nombre_tercero,
                 'telefono_tercero': telefono_tercero,
+                'ubicacion_tercero': ubicacion_tercero,
                 'es_empresa': es_empresa,
                 'nombre_empresa': nombre_empresa,
                 'nit_empresa': nit_empresa,
+                'ubicacion_empresa': ubicacion_empresa,
                 'nombre_propietario_real': nombre_propietario_real,
-                'telefono_propietario_real': telefono_propietario_real
+                'telefono_propietario_real': telefono_propietario_real,
+                'ubicacion_propietario_real': ubicacion_propietario_real
             }
             
             logger.info(f"👤 Datos cliente a guardar:")
             logger.info(f"   es_propietario: {es_propietario}")
             logger.info(f"   tipo_tercero: {tipo_tercero}")
-            logger.info(f"   nombre_tercero: {nombre_tercero}")
-            logger.info(f"   es_empresa: {es_empresa}")
-            logger.info(f"   nombre_empresa: {nombre_empresa}")
+            logger.info(f"   nombre a usar: {nombre}")
+            logger.info(f"   telefono a usar: {telefono}")
             
+            # Buscar usuario existente
             if telefono:
                 usuario_existente = supabase.table('usuario') \
                     .select('id') \
@@ -1023,7 +1064,6 @@ def finalizar_sesion(current_user):
                 if usuario_existente.data:
                     id_usuario = usuario_existente.data[0]['id']
                     
-                    # Actualizar datos del usuario
                     supabase.table('usuario') \
                         .update({
                             'nombre': nombre,
@@ -1040,7 +1080,6 @@ def finalizar_sesion(current_user):
                     if cliente_existente.data:
                         id_cliente = cliente_existente.data[0]['id']
                         
-                        # Actualizar cliente con propietario/tercero
                         supabase.table('cliente') \
                             .update({
                                 'latitud': latitud,
@@ -1049,8 +1088,9 @@ def finalizar_sesion(current_user):
                             }) \
                             .eq('id', id_cliente) \
                             .execute()
-                        logger.info(f"✅ Cliente actualizado con datos de propietario: {id_cliente}")
+                        logger.info(f"✅ Cliente actualizado: {id_cliente}")
             
+            # Crear nuevo cliente si no existe
             if not id_cliente:
                 import uuid
                 from werkzeug.security import generate_password_hash
@@ -1076,7 +1116,6 @@ def finalizar_sesion(current_user):
                         'fecha_asignacion': datetime.datetime.now().isoformat()
                     }).execute()
                     
-                    # 🔥 CREAR CLIENTE CON PROPIETARIO/TERCERO
                     cliente_data_insert = {
                         'id_usuario': id_usuario,
                         'tipo_documento': 'CI',
@@ -1093,7 +1132,7 @@ def finalizar_sesion(current_user):
                     
                     if cliente_result.data:
                         id_cliente = cliente_result.data[0]['id']
-                        logger.info(f"✅ Cliente creado con datos de propietario: {id_cliente}")
+                        logger.info(f"✅ Cliente creado: {id_cliente}")
             
             if not id_cliente:
                 return jsonify({'error': 'Error creando cliente'}), 500
@@ -1139,7 +1178,7 @@ def finalizar_sesion(current_user):
                 return jsonify({'error': 'Error creando vehículo'}), 500
             
             # ---------------------------------------------
-            # 5.3 Generar código único (OT-YYMMDD-NNN)
+            # 5.3 Generar código único
             # ---------------------------------------------
             fecha = datetime.datetime.now()
             inicio_dia = datetime.datetime.combine(fecha.date(), datetime.time.min)
@@ -1224,37 +1263,29 @@ def finalizar_sesion(current_user):
                 supabase.table('recepcion').insert({
                     'id_orden_trabajo': id_orden
                 }).execute()
-                logger.info(f"✅ Recepción básica guardada")
             
-            # =============================================
+            # ---------------------------------------------
             # 5.6 GUARDAR codigo_orden + fotos opcionales + comentarios
-            # =============================================
+            # ---------------------------------------------
             try:
-                # Extraer fotos opcionales (opcional1 a opcional10)
                 fotos_opcionales_guardar = {}
                 for i in range(1, 11):
                     campo = f'opcional{i}'
                     if campo in fotos and fotos[campo]:
                         fotos_opcionales_guardar[campo] = fotos[campo]
                 
-                # Obtener comentarios de la sesión
                 comentarios_guardar = sesion.get('datos', {}).get('comentarios', {})
-                
-                # Construir datos actualizados con codigo_orden
                 datos_actualizados = sesion.get('datos', {})
                 datos_actualizados['codigo_orden'] = codigo_unico
                 
-                # Asegurar que las fotos opcionales estén en datos.fotos
                 if 'fotos' not in datos_actualizados:
                     datos_actualizados['fotos'] = {}
                 for campo, url in fotos_opcionales_guardar.items():
                     datos_actualizados['fotos'][campo] = url
                 
-                # Agregar comentarios dentro de datos
                 if comentarios_guardar:
                     datos_actualizados['comentarios'] = comentarios_guardar
                 
-                # UN SOLO UPDATE
                 supabase.table('sesion_colaborativa') \
                     .update({
                         'datos': datos_actualizados,
@@ -1264,34 +1295,21 @@ def finalizar_sesion(current_user):
                     .eq('codigo', codigo_sesion) \
                     .execute()
                 
-                logger.info(f"✅ Sesión {codigo_sesion} actualizada:")
-                logger.info(f"   codigo_orden: {codigo_unico}")
-                logger.info(f"   fotos opcionales: {len(fotos_opcionales_guardar)}")
-                logger.info(f"   comentarios: {len(comentarios_guardar) if comentarios_guardar else 0}")
-                
+                logger.info(f"✅ Sesión {codigo_sesion} actualizada con codigo_orden: {codigo_unico}")
             except Exception as e:
-                logger.error(f"❌ Error guardando datos finales en sesión colaborativa: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
+                logger.error(f"❌ Error actualizando sesión colaborativa: {e}")
             
             # ---------------------------------------------
             # 5.7 Renombrar carpeta en Drive
             # ---------------------------------------------
             carpeta_renombrada = False
             try:
-                logger.info(f"📁 Intentando renombrar carpeta {codigo_sesion} a {codigo_unico}")
                 folder_id = google_drive.get_folder_id_by_name(codigo_sesion)
-                
                 if folder_id:
                     rename_result = google_drive.rename_folder(folder_id, codigo_unico)
                     if rename_result:
                         carpeta_renombrada = True
-                        logger.info(f"✅ Carpeta renombrada exitosamente: {codigo_sesion} -> {codigo_unico}")
-                    else:
-                        logger.warning(f"⚠️ No se pudo renombrar la carpeta {codigo_sesion}")
-                else:
-                    logger.warning(f"⚠️ No se encontró la carpeta con nombre: {codigo_sesion}")
-                    
+                        logger.info(f"✅ Carpeta renombrada: {codigo_sesion} -> {codigo_unico}")
             except Exception as e:
                 logger.error(f"❌ Error renombrando carpeta: {str(e)}")
             
@@ -1299,7 +1317,6 @@ def finalizar_sesion(current_user):
             # 5.8 Limpiar sesión de memoria
             # ---------------------------------------------
             sesion['estado'] = 'finalizada'
-            
             if codigo_sesion in sesiones_activas:
                 del sesiones_activas[codigo_sesion]
             
@@ -2161,7 +2178,7 @@ def detalle_recepcion(current_user, id_orden):
                 logger.warning(f"⚠️ Error obteniendo vehículo: {e}")
         
         # =============================================
-        # 🔥 OBTENER CLIENTE CON CAMPOS DE PROPIETARIO/TERCERO
+        # 🔥 OBTENER CLIENTE CON TODOS LOS CAMPOS
         # =============================================
         usuario = {}
         cliente_data = {}
@@ -2169,9 +2186,9 @@ def detalle_recepcion(current_user, id_orden):
             try:
                 c_result = supabase.table('cliente') \
                     .select('id, id_usuario, latitud, longitud, ubicacion_confirmada, '
-                            'es_propietario, tipo_tercero, nombre_tercero, telefono_tercero, '
-                            'es_empresa, nombre_empresa, nit_empresa, '
-                            'nombre_propietario_real, telefono_propietario_real') \
+                            'es_propietario, tipo_tercero, nombre_tercero, telefono_tercero, ubicacion_tercero, '
+                            'es_empresa, nombre_empresa, nit_empresa, ubicacion_empresa, '
+                            'nombre_propietario_real, telefono_propietario_real, ubicacion_propietario_real') \
                     .eq('id', vehiculo['id_cliente']) \
                     .execute()
                 if c_result.data:
@@ -2186,7 +2203,7 @@ def detalle_recepcion(current_user, id_orden):
             except Exception as e:
                 logger.warning(f"⚠️ Error obteniendo cliente: {e}")
         
-        # Obtener recepción (fotos obligatorias)
+        # Obtener recepción
         recepcion_result = supabase.table('recepcion') \
             .select('*') \
             .eq('id_orden_trabajo', id_orden) \
@@ -2207,7 +2224,6 @@ def detalle_recepcion(current_user, id_orden):
                 .eq('estado', 'finalizada') \
                 .execute()
             
-            # Buscar por codigo_orden en datos (más confiable)
             if codigo_unico:
                 for s in (sesiones_result.data or []):
                     datos_sesion = s.get('datos', {})
@@ -2215,26 +2231,22 @@ def detalle_recepcion(current_user, id_orden):
                         sesion = s
                         logger.info(f"✅ Sesión encontrada por codigo_orden: {s['codigo']}")
                         break
-                    
                     if s.get('codigo') == codigo_unico:
                         sesion = s
-                        logger.info(f"✅ Sesión encontrada por codigo (renombrado): {s['codigo']}")
+                        logger.info(f"✅ Sesión encontrada por codigo: {s['codigo']}")
                         break
             
-            # Fallback: buscar por placa
             if not sesion and vehiculo.get('placa'):
                 placa = vehiculo.get('placa')
                 for s in (sesiones_result.data or []):
                     datos_sesion = s.get('datos', {})
                     if datos_sesion.get('vehiculo', {}).get('placa') == placa:
                         sesion = s
-                        logger.info(f"⚠️ Sesión encontrada por placa (fallback): {s['codigo']}")
+                        logger.info(f"⚠️ Sesión encontrada por placa: {s['codigo']}")
                         break
-                        
         except Exception as e:
-            logger.warning(f"⚠️ Error buscando sesión colaborativa: {e}")
+            logger.warning(f"⚠️ Error buscando sesión: {e}")
         
-        # Extraer fotos opcionales de la sesión
         if sesion:
             datos_sesion = sesion.get('datos', {})
             fotos_sesion = datos_sesion.get('fotos', {})
@@ -2244,11 +2256,6 @@ def detalle_recepcion(current_user, id_orden):
                 campo = f'opcional{i}'
                 if campo in fotos_sesion and fotos_sesion[campo]:
                     fotos_opcionales[f'url_{campo}'] = fotos_sesion[campo]
-            
-            logger.info(f"📸 Fotos opcionales recuperadas: {len(fotos_opcionales)}")
-            logger.info(f"📝 Comentarios recuperados: {len(comentarios) if comentarios else 0}")
-        else:
-            logger.warning(f"⚠️ No se encontró sesión colaborativa para orden {id_orden} ({codigo_unico})")
         
         # =============================================
         # CONSTRUIR FOTOS COMPLETAS
@@ -2265,7 +2272,6 @@ def detalle_recepcion(current_user, id_orden):
         
         todas_las_fotos = {**fotos_obligatorias, **fotos_opcionales}
         
-        # Normalizar URLs
         fotos_limpias = {}
         for key, value in todas_las_fotos.items():
             if value and value != 'null' and value != 'None' and value != '':
@@ -2274,7 +2280,7 @@ def detalle_recepcion(current_user, id_orden):
                 fotos_limpias[key] = None
         
         # =============================================
-        # 🔥 CONSTRUIR DETALLE COMPLETO CON CAMPOS DE PROPIETARIO
+        # 🔥 CONSTRUIR DETALLE CON TODOS LOS CAMPOS
         # =============================================
         detalle = {
             'id': orden['id'],
@@ -2295,16 +2301,19 @@ def detalle_recepcion(current_user, id_orden):
             'longitud': cliente_data.get('longitud'),
             'ubicacion_confirmada': cliente_data.get('ubicacion_confirmada', False),
             
-            # 🔥 NUEVOS CAMPOS DE PROPIETARIO/TERCERO
+            # 🔥 CAMPOS DE PROPIETARIO/TERCERO
             'es_propietario': cliente_data.get('es_propietario', True),
             'tipo_tercero': cliente_data.get('tipo_tercero'),
             'nombre_tercero': cliente_data.get('nombre_tercero'),
             'telefono_tercero': cliente_data.get('telefono_tercero'),
+            'ubicacion_tercero': cliente_data.get('ubicacion_tercero'),
             'es_empresa': cliente_data.get('es_empresa', False),
             'nombre_empresa': cliente_data.get('nombre_empresa'),
             'nit_empresa': cliente_data.get('nit_empresa'),
+            'ubicacion_empresa': cliente_data.get('ubicacion_empresa'),
             'nombre_propietario_real': cliente_data.get('nombre_propietario_real'),
             'telefono_propietario_real': cliente_data.get('telefono_propietario_real'),
+            'ubicacion_propietario_real': cliente_data.get('ubicacion_propietario_real'),
             
             'fotos': fotos_limpias,
             'comentarios': comentarios or {},
@@ -2314,7 +2323,7 @@ def detalle_recepcion(current_user, id_orden):
         }
         
         total_fotos = sum(1 for v in fotos_limpias.values() if v)
-        logger.info(f"📸 Total fotos en respuesta: {total_fotos} (obligatorias + opcionales)")
+        logger.info(f"📸 Total fotos: {total_fotos}")
         
         return jsonify({'success': True, 'detalle': detalle}), 200
         

@@ -1296,12 +1296,29 @@ async function guardarSeccion(seccion) {
     
     switch(seccion) {
         case 'cliente':
+            // 🔥 NUEVOS CAMPOS: propietario / tercero / empresa
+            const tipoProp = document.getElementById('tipoPropietarioRadio')?.checked 
+                ? 'propietario' 
+                : 'tercero';
+            const esTercero = tipoProp === 'tercero';
+            
             datos = {
                 nombre: document.getElementById('clienteNombre')?.value || '',
                 telefono: document.getElementById('clienteTelefono')?.value || '',
                 ubicacion: document.getElementById('clienteUbicacion')?.value || '',
                 latitud: document.getElementById('clienteLatitud')?.value || null,
-                longitud: document.getElementById('clienteLongitud')?.value || null
+                longitud: document.getElementById('clienteLongitud')?.value || null,
+                
+                // 🔥 CAMPOS DE PROPIETARIO/TERCERO
+                es_propietario: !esTercero,
+                tipo_tercero: esTercero ? (document.getElementById('tipoTercero')?.value || null) : null,
+                nombre_tercero: esTercero ? (document.getElementById('nombreTercero')?.value || null) : null,
+                telefono_tercero: esTercero ? (document.getElementById('telefonoTercero')?.value || null) : null,
+                es_empresa: esTercero && (document.getElementById('tipoTercero')?.value === 'representante_empresa'),
+                nombre_empresa: esTercero ? (document.getElementById('nombreEmpresa')?.value || null) : null,
+                nit_empresa: esTercero ? (document.getElementById('nitEmpresa')?.value || null) : null,
+                nombre_propietario_real: esTercero ? (document.getElementById('nombrePropietarioReal')?.value || null) : null,
+                telefono_propietario_real: esTercero ? (document.getElementById('telefonoPropietarioReal')?.value || null) : null
             };
             break;
         case 'vehiculo':
@@ -1314,7 +1331,6 @@ async function guardarSeccion(seccion) {
             };
             break;
         case 'fotos':
-            // 🔥 RECOLECTAR TODAS LAS FOTOS (OBLIGATORIAS + OPCIONALES)
             const fotosData = {};
             const comentariosData = obtenerComentariosOpcionales();
             
@@ -1333,14 +1349,12 @@ async function guardarSeccion(seccion) {
                 }
             }
             
-            // 🔥 Enviar todas las fotos (incluyendo opcionales)
             datos = {
                 fotos: fotosData,
                 comentarios: comentariosData
             };
             
             console.log(`📸 Guardando ${Object.keys(fotosData).length} fotos en sesión`);
-            console.log('📸 Fotos:', fotosData);
             break;
         case 'descripcion':
             datos = { 
@@ -1652,8 +1666,30 @@ function validarCompletadoCliente() {
     const telefono = document.getElementById('clienteTelefono')?.value?.trim();
     const ubicacion = document.getElementById('clienteUbicacion')?.value?.trim();
     
-    // 🔥 AHORA REQUIERE LOS 3 CAMPOS: NOMBRE + TELÉFONO + UBICACIÓN
-    const completada = !!(nombre && telefono && ubicacion);
+    // 🔥 Verificar si es propietario o tercero
+    const esPropietario = document.getElementById('tipoPropietarioRadio')?.checked || true;
+    const esTercero = !esPropietario;
+    
+    let completada = !!(nombre && telefono && ubicacion);
+    
+    // Si es tercero, validar campos adicionales
+    if (esTercero) {
+        const tipoTercero = document.getElementById('tipoTercero')?.value;
+        const nombreTercero = document.getElementById('nombreTercero')?.value?.trim();
+        const telefonoTercero = document.getElementById('telefonoTercero')?.value?.trim();
+        const nombrePropietarioReal = document.getElementById('nombrePropietarioReal')?.value?.trim();
+        const telefonoPropietarioReal = document.getElementById('telefonoPropietarioReal')?.value?.trim();
+        
+        completada = completada && 
+            !!(tipoTercero && nombreTercero && telefonoTercero && 
+               nombrePropietarioReal && telefonoPropietarioReal);
+        
+        // Si es representante de empresa, validar empresa
+        if (tipoTercero === 'representante_empresa') {
+            const nombreEmpresa = document.getElementById('nombreEmpresa')?.value?.trim();
+            completada = completada && !!nombreEmpresa;
+        }
+    }
     
     if (seccionesCompletadasLocal.cliente !== completada) {
         seccionesCompletadasLocal.cliente = completada;
@@ -1805,6 +1841,10 @@ async function cargarDatosSesionInicial() {
             document.getElementById('clienteUbicacion').value = datos.cliente.ubicacion || '';
             document.getElementById('clienteLatitud').value = datos.cliente.latitud || '';
             document.getElementById('clienteLongitud').value = datos.cliente.longitud || '';
+            
+            // 🔥 CARGAR DATOS DE PROPIETARIO/TERCERO
+            cargarDatosPropietario(datos.cliente);
+            
             validarCompletadoCliente();
         }
         
@@ -1928,33 +1968,28 @@ async function finalizarSesionConReporte() {
         for (const foto of fotosObligatorias) {
             const uploadDiv = document.getElementById(`upload-${foto.id}`);
             
-            // 1. Buscar URL en DOM
             let url = uploadDiv?.getAttribute('data-drive-url') || 
                      uploadDiv?.dataset?.driveUrl || 
                      fotosSubidasLocal[foto.campo];
             
-            // 2. Buscar en sesión
             if (!url || url === 'null' || url === '' || url === 'undefined') {
                 if (sesionActual?.datos?.fotos) {
                     url = sesionActual.datos.fotos[CAMPO_MAP[foto.campo]];
                 }
             }
             
-            // 3. Buscar en datos originales (modo edición)
             if (!url || url === 'null' || url === '' || url === 'undefined') {
                 if (window.datosOriginalesRecepcion?.fotos) {
                     url = window.datosOriginalesRecepcion.fotos[CAMPO_MAP[foto.campo]];
                 }
             }
             
-            // 4. Buscar en fotos originales
             if (!url || url === 'null' || url === '' || url === 'undefined') {
                 if (window.fotosOriginalesRecepcion) {
                     url = window.fotosOriginalesRecepcion[CAMPO_MAP[foto.campo]];
                 }
             }
             
-            // VERIFICAR SI LA FOTO TIENE IMAGEN EN PREVIEW (subida pero sin URL)
             const preview = uploadDiv?.querySelector('.upload-preview');
             const hasImage = uploadDiv?.classList.contains('has-image') || 
                             (preview && preview.style.backgroundImage && 
@@ -1962,36 +1997,27 @@ async function finalizarSesionConReporte() {
                              preview.style.backgroundImage !== 'none' &&
                              !preview.style.backgroundImage.includes('Sin imagen'));
             
-            // Si tiene imagen pero no URL, está subiendo
             if (hasImage && (!url || url === 'null' || url === '' || url === 'undefined')) {
                 fotoTieneSubidaPendiente = true;
                 fotosFaltantes.push(`${foto.label} (subiendo...)`);
                 continue;
             }
             
-            // Si no tiene imagen y no tiene URL, está vacía
             if (!hasImage && (!url || url === 'null' || url === '' || url === 'undefined')) {
                 fotosFaltantes.push(foto.label);
                 continue;
             }
             
-            // Si tiene URL válida
             if (url && url !== 'null' && url !== '' && url !== 'undefined') {
                 fotosParaGuardar[foto.campo] = url;
                 totalFotosConUrl++;
             }
         }
 
-        // =============================================
-        // 2. VERIFICAR QUE TODAS LAS FOTOS TENGAN URL
-        // =============================================
-
-        // Si hay subidas pendientes, esperar un poco
         if (fotoTieneSubidaPendiente) {
             updateProgressMessage('Esperando que terminen las subidas...');
             await new Promise(resolve => setTimeout(resolve, 2000));
             
-            // Recolectar nuevamente
             let nuevasFotos = 0;
             for (const foto of fotosObligatorias) {
                 const uploadDiv = document.getElementById(`upload-${foto.id}`);
@@ -2006,7 +2032,6 @@ async function finalizarSesionConReporte() {
             totalFotosConUrl = nuevasFotos;
         }
 
-        // Si faltan fotos, verificar nuevamente qué fotos faltan
         if (totalFotosConUrl < 7) {
             fotosFaltantes = [];
             for (const foto of fotosObligatorias) {
@@ -2022,7 +2047,6 @@ async function finalizarSesionConReporte() {
                 }
                 
                 if (!url || url === 'null' || url === '' || url === 'undefined') {
-                    // Verificar si tiene imagen en el preview
                     const preview = uploadDiv?.querySelector('.upload-preview');
                     const hasImage = uploadDiv?.classList.contains('has-image') || 
                                     (preview && preview.style.backgroundImage && 
@@ -2044,16 +2068,40 @@ async function finalizarSesionConReporte() {
         }
 
         // =============================================
-        // 3. VALIDAR TODAS LAS SECCIONES
+        // 2. VALIDAR TODAS LAS SECCIONES
         // =============================================
         updateProgressBar(30);
         updateProgressMessage('Validando datos...');
         
-        // Validar cliente
+        // Validar cliente (con propietario/tercero)
         const clienteNombre = document.getElementById('clienteNombre')?.value?.trim() || '';
         const clienteTelefono = document.getElementById('clienteTelefono')?.value?.trim() || '';
         const clienteUbicacion = document.getElementById('clienteUbicacion')?.value?.trim() || '';
-        seccionesCompletadasLocal.cliente = !!(clienteNombre && clienteTelefono && clienteUbicacion);
+        
+        // 🔥 VALIDACIÓN CON PROPIETARIO/TERCERO
+        const esPropietario = document.getElementById('tipoPropietarioRadio')?.checked ?? true;
+        const esTercero = !esPropietario;
+        
+        let clienteCompleto = !!(clienteNombre && clienteTelefono && clienteUbicacion);
+        
+        if (esTercero) {
+            const tipoTercero = document.getElementById('tipoTercero')?.value;
+            const nombreTercero = document.getElementById('nombreTercero')?.value?.trim();
+            const telefonoTercero = document.getElementById('telefonoTercero')?.value?.trim();
+            const nombrePropietarioReal = document.getElementById('nombrePropietarioReal')?.value?.trim();
+            const telefonoPropietarioReal = document.getElementById('telefonoPropietarioReal')?.value?.trim();
+            
+            clienteCompleto = clienteCompleto && 
+                !!(tipoTercero && nombreTercero && telefonoTercero && 
+                   nombrePropietarioReal && telefonoPropietarioReal);
+            
+            if (tipoTercero === 'representante_empresa') {
+                const nombreEmpresa = document.getElementById('nombreEmpresa')?.value?.trim();
+                clienteCompleto = clienteCompleto && !!nombreEmpresa;
+            }
+        }
+        
+        seccionesCompletadasLocal.cliente = clienteCompleto;
         actualizarEstadoVisualSeccion('cliente', seccionesCompletadasLocal.cliente);
         
         // Validar vehículo
@@ -2065,7 +2113,7 @@ async function finalizarSesionConReporte() {
         seccionesCompletadasLocal.vehiculo = !!(placa && marca && modelo && anio && kilometraje);
         actualizarEstadoVisualSeccion('vehiculo', seccionesCompletadasLocal.vehiculo);
         
-        // Validar fotos (usar totalFotosConUrl)
+        // Validar fotos
         seccionesCompletadasLocal.fotos = totalFotosConUrl === 7;
         actualizarEstadoVisualSeccion('fotos', seccionesCompletadasLocal.fotos);
         
@@ -2075,7 +2123,7 @@ async function finalizarSesionConReporte() {
         actualizarEstadoVisualSeccion('descripcion', seccionesCompletadasLocal.descripcion);
         
         // =============================================
-        // 4. VERIFICAR ESTADO FINAL
+        // 3. VERIFICAR ESTADO FINAL
         // =============================================
         const seccionesFaltantes = [];
         if (!seccionesCompletadasLocal.cliente) seccionesFaltantes.push('Cliente');
@@ -2090,7 +2138,7 @@ async function finalizarSesionConReporte() {
         }
 
         // =============================================
-        // 5. CONFIRMAR CON EL USUARIO
+        // 4. CONFIRMAR CON EL USUARIO
         // =============================================
         if (!confirm('✅ ¿Finalizar recepción?\n\nLos datos se guardarán permanentemente y se generará la orden de trabajo.')) {
             hideProgress();
@@ -2098,19 +2146,15 @@ async function finalizarSesionConReporte() {
         }
 
         // =============================================
-        // 6. PREPARAR DATOS PARA ENVIAR - FORMATO CORREGIDO
+        // 5. PREPARAR DATOS PARA ENVIAR
         // =============================================
         updateProgressBar(50);
         updateProgressMessage('Preparando datos...');
         
-        // Recolectar todas las URLs de fotos de la sesión o del DOM
         const fotosFinales = {};
-        
-        // 🔥 SOLO LAS 7 OBLIGATORIAS CON VALIDACIÓN ESTRICTA
         const camposObligatorios = ['lateral_izquierdo', 'lateral_derecho', 'frontal', 'trasera', 'superior', 'inferior', 'tablero'];
         
         for (const campo of camposObligatorios) {
-            // Buscar en el DOM
             const fotoConfig = FOTOS_CONFIG.find(f => f.campo === campo);
             const uploadDiv = document.getElementById(`upload-${fotoConfig?.id}`);
             
@@ -2118,28 +2162,24 @@ async function finalizarSesionConReporte() {
                      uploadDiv?.dataset?.driveUrl || 
                      fotosSubidasLocal[campo];
             
-            // Buscar en sesión
             if (!url || url === 'null' || url === '' || url === 'undefined') {
                 if (sesionActual?.datos?.fotos) {
                     url = sesionActual.datos.fotos[CAMPO_MAP[campo]];
                 }
             }
             
-            // Buscar en datos originales
             if (!url || url === 'null' || url === '' || url === 'undefined') {
                 if (window.datosOriginalesRecepcion?.fotos) {
                     url = window.datosOriginalesRecepcion.fotos[CAMPO_MAP[campo]];
                 }
             }
             
-            // Buscar en fotos originales
             if (!url || url === 'null' || url === '' || url === 'undefined') {
                 if (window.fotosOriginalesRecepcion) {
                     url = window.fotosOriginalesRecepcion[CAMPO_MAP[campo]];
                 }
             }
             
-            // ✅ SI TIENE URL VÁLIDA, GUARDARLA; SI NO, GUARDAR null
             if (url && url !== 'null' && url !== '' && url !== 'undefined') {
                 fotosFinales[campo] = url;
             } else {
@@ -2147,15 +2187,12 @@ async function finalizarSesionConReporte() {
             }
         }
         
-        // 🔥 LOG PARA DEBUG - VER QUÉ SE ESTÁ ENVIANDO
         console.log('📸 Fotos finales para backend:', fotosFinales);
         const totalFotosValidas = Object.values(fotosFinales).filter(v => v !== null).length;
         console.log(`📸 Total fotos válidas: ${totalFotosValidas}/7`);
         
-        // Recolectar comentarios de fotos opcionales
         const comentariosOpcionales = obtenerComentariosOpcionales();
         
-        // Recolectar fotos opcionales (10 adicionales) - SOLO PARA GUARDAR COMO DATO ADICIONAL
         const fotosOpcionales = {};
         const camposOpcionales = ['opcional1', 'opcional2', 'opcional3', 'opcional4', 'opcional5', 
                                   'opcional6', 'opcional7', 'opcional8', 'opcional9', 'opcional10'];
@@ -2173,15 +2210,17 @@ async function finalizarSesionConReporte() {
             }
         }
         
-        // 🔥 CONSTRUIR OBJETO FINAL - FORMATO QUE ESPERA EL BACKEND
-        // El backend espera que las fotos estén en la raíz del objeto
+        // 🔥 CONSTRUIR OBJETO FINAL CON DATOS DE PROPIETARIO
         const datosFinales = {
             cliente: {
                 nombre: clienteNombre,
                 telefono: clienteTelefono,
                 ubicacion: document.getElementById('clienteUbicacion')?.value || '',
                 latitud: document.getElementById('clienteLatitud')?.value || null,
-                longitud: document.getElementById('clienteLongitud')?.value || null
+                longitud: document.getElementById('clienteLongitud')?.value || null,
+                
+                // 🔥 NUEVOS CAMPOS DE PROPIETARIO/TERCERO
+                ...obtenerDatosPropietario()
             },
             vehiculo: {
                 placa: placa.toUpperCase(),
@@ -2190,7 +2229,6 @@ async function finalizarSesionConReporte() {
                 anio: parseInt(document.getElementById('vehiculoAnio')?.value) || null,
                 kilometraje: parseInt(document.getElementById('vehiculoKilometraje')?.value) || 0
             },
-            // ✅ FOTOS OBLIGATORIAS - EN LA RAÍZ DEL OBJETO
             lateral_izquierdo: fotosFinales.lateral_izquierdo,
             lateral_derecho: fotosFinales.lateral_derecho,
             frontal: fotosFinales.frontal,
@@ -2198,11 +2236,8 @@ async function finalizarSesionConReporte() {
             superior: fotosFinales.superior,
             inferior: fotosFinales.inferior,
             tablero: fotosFinales.tablero,
-            // ✅ TAMBIÉN ENVIAR COMO "fotos" POR SI ACASO
             fotos: fotosFinales,
-            // ✅ FOTOS OPCIONALES
             fotos_opcionales: fotosOpcionales,
-            // ✅ COMENTARIOS DE FOTOS OPCIONALES
             comentarios: comentariosOpcionales,
             descripcion: {
                 texto: descripcionTexto,
@@ -2213,22 +2248,13 @@ async function finalizarSesionConReporte() {
             usuario_nombre: userInfo?.nombre
         };
 
-        // 🔥 LOG PARA DEBUG - VER QUÉ SE ESTÁ ENVIANDO
         console.log('📤 ENVIANDO AL BACKEND:');
         console.log('📤 codigoSesion:', codigoSesion);
-        console.log('📤 fotos en raíz:', {
-            lateral_izquierdo: datosFinales.lateral_izquierdo,
-            lateral_derecho: datosFinales.lateral_derecho,
-            frontal: datosFinales.frontal,
-            trasera: datosFinales.trasera,
-            superior: datosFinales.superior,
-            inferior: datosFinales.inferior,
-            tablero: datosFinales.tablero
-        });
+        console.log('📤 cliente:', datosFinales.cliente);
         console.log('📤 Total fotos con URL:', Object.values(fotosFinales).filter(v => v !== null).length);
 
         // =============================================
-        // 7. ENVIAR AL SERVIDOR PARA FINALIZAR
+        // 6. ENVIAR AL SERVIDOR PARA FINALIZAR
         // =============================================
         updateProgressBar(60);
         updateProgressMessage('Generando orden de trabajo...');
@@ -2259,7 +2285,7 @@ async function finalizarSesionConReporte() {
         }
 
         // =============================================
-        // 8. PROCESAR RESPUESTA EXITOSA
+        // 7. PROCESAR RESPUESTA EXITOSA
         // =============================================
         updateProgressBar(90);
         updateProgressMessage('¡Recepción finalizada con éxito!');
@@ -2267,9 +2293,6 @@ async function finalizarSesionConReporte() {
         const idOrden = data.id_orden;
         mostrarNotificacion(`✅ Recepción finalizada: ${data.codigo || 'OT-N/A'}`, 'success');
         
-        // =============================================
-        // 9. GENERAR REPORTE / PDF
-        // =============================================
         if (idOrden) {
             updateProgressMessage('Generando reporte...');
             await mostrarReporteFinal(idOrden);
@@ -2278,7 +2301,7 @@ async function finalizarSesionConReporte() {
         }
         
         // =============================================
-        // 10. LIMPIAR SESIÓN
+        // 8. LIMPIAR SESIÓN
         // =============================================
         updateProgressBar(100);
         updateProgressMessage('¡Completado!');
@@ -4855,13 +4878,6 @@ async function cargarAudioConToken(audioUrl) {
         return null;
     }
 }
-// =====================================================
-// EDITAR RECEPCIÓN (COMPLETO - CON AUDIO CORREGIDO)
-// =====================================================
-// =====================================================
-// EDITAR RECEPCIÓN
-// =====================================================
-
 async function editarRecepcion(id) {
     try {
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/detalle-recepcion/${id}`, { method: 'GET' });
@@ -4895,6 +4911,20 @@ async function editarRecepcion(id) {
         document.getElementById('clienteUbicacion').value = detalle.cliente_ubicacion || '';
         document.getElementById('clienteLatitud').value = detalle.latitud || '';
         document.getElementById('clienteLongitud').value = detalle.longitud || '';
+        
+        // 🔥 CARGAR DATOS DE PROPIETARIO/TERCERO
+        cargarDatosPropietario({
+            es_propietario: detalle.es_propietario,
+            tipo_tercero: detalle.tipo_tercero,
+            nombre_tercero: detalle.nombre_tercero,
+            telefono_tercero: detalle.telefono_tercero,
+            es_empresa: detalle.es_empresa,
+            nombre_empresa: detalle.nombre_empresa,
+            nit_empresa: detalle.nit_empresa,
+            nombre_propietario_real: detalle.nombre_propietario_real,
+            telefono_propietario_real: detalle.telefono_propietario_real
+        });
+        
         seccionesCompletadasLocal.cliente = !!(detalle.cliente_nombre && detalle.cliente_telefono && detalle.cliente_ubicacion);
         actualizarEstadoVisualSeccion('cliente', seccionesCompletadasLocal.cliente);
         
@@ -5057,10 +5087,6 @@ function cancelarEdicion() {
         mostrarNotificacion('Edición cancelada', 'info');
     }
 }
-// =====================================================
-// GUARDAR CAMBIOS RECEPCIÓN (COMPLETA)
-// =====================================================
-
 async function guardarCambiosRecepcion() {
     if (!recepcionEditandoId) {
         mostrarNotificacion('⚠️ No hay una recepción en edición', 'warning');
@@ -5101,12 +5127,10 @@ async function guardarCambiosRecepcion() {
         for (const foto of fotosObligatorias) {
             const uploadDiv = document.getElementById(`upload-${foto.id}`);
             
-            // Obtener URL del DOM
             let url = uploadDiv?.getAttribute('data-drive-url') || 
                       uploadDiv?.dataset?.driveUrl || 
                       fotosSubidasLocal[foto.campo];
             
-            // Si no tiene URL, verificar si tiene imagen en el preview
             if (!url || url === 'null' || url === '' || url === 'undefined') {
                 const preview = uploadDiv?.querySelector('.upload-preview');
                 const hasImage = uploadDiv?.classList.contains('has-image') || 
@@ -5116,20 +5140,17 @@ async function guardarCambiosRecepcion() {
                                  !preview.style.backgroundImage.includes('Sin imagen'));
                 
                 if (hasImage) {
-                    // Tiene imagen pero no URL - está subiendo o falló
                     fotosData[foto.campo] = null;
                     console.log(`📸 ${foto.campo}: tiene imagen pero no URL (subiendo)`);
                     continue;
                 }
             }
             
-            // Si tiene URL válida
             if (url && url !== 'null' && url !== '' && url !== 'undefined') {
                 fotosData[foto.campo] = url;
                 fotosValidas++;
                 console.log(`📸 ${foto.campo}: ${url.substring(0, 50)}...`);
             } else {
-                // La foto fue eliminada o nunca se subió
                 fotosData[foto.campo] = null;
                 console.log(`📸 ${foto.campo}: SIN URL (eliminada o vacía)`);
             }
@@ -5140,23 +5161,24 @@ async function guardarCambiosRecepcion() {
         updateProgressBar(20);
         updateProgressMessage('Preparando datos...');
         
-        // Recolectar comentarios de fotos opcionales
         const comentariosOpcionales = obtenerComentariosOpcionales();
         
-        // Extraer código de sesión de las URLs de fotos
         const sesionCodigoExtraido = extraerSesionCodigoDeFotos(fotosData);
         const sesionCodigoOriginal = window.sesionCodigoOriginal || sesionCodigoExtraido || codigoSesion || null;
         
         console.log('📌 Código de sesión para edición:', sesionCodigoOriginal);
         
-        // Construir datos actualizados
+        // Construir datos actualizados CON PROPIETARIO/TERCERO
         const datosActualizados = {
             cliente: {
                 nombre: document.getElementById('clienteNombre')?.value || '',
                 telefono: document.getElementById('clienteTelefono')?.value || '',
                 ubicacion: document.getElementById('clienteUbicacion')?.value || '',
                 latitud: document.getElementById('clienteLatitud')?.value || null,
-                longitud: document.getElementById('clienteLongitud')?.value || null
+                longitud: document.getElementById('clienteLongitud')?.value || null,
+                
+                // 🔥 NUEVOS CAMPOS DE PROPIETARIO/TERCERO
+                ...obtenerDatosPropietario()
             },
             vehiculo: {
                 placa: document.getElementById('vehiculoPlaca')?.value.toUpperCase() || '',
@@ -5174,6 +5196,8 @@ async function guardarCambiosRecepcion() {
             sesion_codigo: sesionCodigoOriginal || window.datosOriginalesRecepcion?.codigo_unico || null,
             codigo_unico: window.datosOriginalesRecepcion?.codigo_unico || null
         };
+        
+        console.log('📤 Datos a actualizar:', datosActualizados);
         
         updateProgressBar(40);
         updateProgressMessage('Enviando datos al servidor...');
@@ -5239,7 +5263,6 @@ async function guardarCambiosRecepcion() {
         mostrarNotificacion('❌ Error al guardar cambios: ' + error.message, 'error');
     }
 }
-
 function confirmarEliminarRecepcion(id) {
     if (confirm('¿Eliminar esta recepción? Esta acción no se puede deshacer.')) eliminarRecepcion(id);
 }
@@ -5775,12 +5798,177 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupInputTracking();
     setupUnirsePorCodigo();
     setupModalUbicacionLeaflet();
+    initProgressModelo?.(); // si existe
     initProgressElements();
+    setupTipoPropietario(); // 🔥 AGREGAR ESTA LÍNEA
     await recuperarSesionActiva();
     iniciarPollingSesiones();
     initRecepcionesPanel();
     setupTranscripcionFormulario();
 });
+// =====================================================
+// 🔥 CONFIGURAR LÓGICA DE PROPIETARIO / TERCERO / EMPRESA
+// =====================================================
+
+function setupTipoPropietario() {
+    const radioPropietario = document.getElementById('tipoPropietarioRadio');
+    const radioTercero = document.getElementById('tipoTerceroRadio');
+    const optionPropietario = document.getElementById('optionPropietario');
+    const optionTercero = document.getElementById('optionTercero');
+    const terceroFields = document.getElementById('terceroFields');
+    const tipoTerceroSelect = document.getElementById('tipoTercero');
+    const empresaFields = document.getElementById('empresaFields');
+    
+    if (!radioPropietario || !radioTercero) {
+        console.warn('⚠️ No se encontraron los radios de propietario/tercero');
+        return;
+    }
+    
+    // Función interna para actualizar UI
+    function actualizarUI() {
+        const esTercero = radioTercero.checked;
+        
+        // Actualizar clases de las opciones
+        if (esTercero) {
+            optionPropietario?.classList.remove('active');
+            optionTercero?.classList.add('active');
+            terceroFields?.classList.add('visible');
+        } else {
+            optionPropietario?.classList.add('active');
+            optionTercero?.classList.remove('active');
+            terceroFields?.classList.remove('visible');
+        }
+        
+        // Actualizar campos de empresa según tipo de tercero
+        if (tipoTerceroSelect) {
+            const esRepresentante = tipoTerceroSelect.value === 'representante_empresa';
+            if (esRepresentante && esTercero) {
+                empresaFields?.classList.add('visible');
+            } else {
+                empresaFields?.classList.remove('visible');
+            }
+        }
+        
+        // Revalidar cliente
+        validarCompletadoCliente();
+    }
+    
+    // Event listeners para los radios
+    radioPropietario.addEventListener('change', actualizarUI);
+    radioTercero.addEventListener('change', actualizarUI);
+    
+    // Event listener para el select de tipo de tercero
+    if (tipoTerceroSelect) {
+        tipoTerceroSelect.addEventListener('change', actualizarUI);
+    }
+    
+    // Validaciones en vivo para los campos del tercero
+    const camposTercero = [
+        'nombreTercero', 'telefonoTercero', 
+        'nombrePropietarioReal', 'telefonoPropietarioReal',
+        'nombreEmpresa', 'nitEmpresa'
+    ];
+    
+    camposTercero.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', validarCompletadoCliente);
+        }
+    });
+    
+    // Estado inicial
+    actualizarUI();
+    
+    console.log('✅ Setup propietario/tercero configurado');
+}
+
+// =====================================================
+// 🔥 CARGAR DATOS DE PROPIETARIO/TERCERO EN EDICIÓN
+// =====================================================
+
+function cargarDatosPropietario(datosCliente) {
+    if (!datosCliente) return;
+    
+    const radioPropietario = document.getElementById('tipoPropietarioRadio');
+    const radioTercero = document.getElementById('tipoTerceroRadio');
+    const tipoTerceroSelect = document.getElementById('tipoTercero');
+    const empresaFields = document.getElementById('empresaFields');
+    
+    // Determinar si es propietario o tercero
+    const esPropietario = datosCliente.es_propietario !== false;
+    const esTercero = !esPropietario;
+    
+    // Marcar el radio correspondiente
+    if (esTercero) {
+        if (radioTercero) radioTercero.checked = true;
+        if (radioPropietario) radioPropietario.checked = false;
+    } else {
+        if (radioPropietario) radioPropietario.checked = true;
+        if (radioTercero) radioTercero.checked = false;
+    }
+    
+    // Cargar tipo de tercero
+    if (esTercero) {
+        if (tipoTerceroSelect && datosCliente.tipo_tercero) {
+            tipoTerceroSelect.value = datosCliente.tipo_tercero;
+        }
+        
+        // Cargar campos del tercero
+        if (document.getElementById('nombreTercero')) {
+            document.getElementById('nombreTercero').value = datosCliente.nombre_tercero || '';
+        }
+        if (document.getElementById('telefonoTercero')) {
+            document.getElementById('telefonoTercero').value = datosCliente.telefono_tercero || '';
+        }
+        
+        // Cargar campos de empresa si aplica
+        const esEmpresa = datosCliente.es_empresa === true;
+        if (esEmpresa && empresaFields) {
+            empresaFields.classList.add('visible');
+        }
+        
+        if (document.getElementById('nombreEmpresa')) {
+            document.getElementById('nombreEmpresa').value = datosCliente.nombre_empresa || '';
+        }
+        if (document.getElementById('nitEmpresa')) {
+            document.getElementById('nitEmpresa').value = datosCliente.nit_empresa || '';
+        }
+        
+        // Cargar campos del dueño real
+        if (document.getElementById('nombrePropietarioReal')) {
+            document.getElementById('nombrePropietarioReal').value = datosCliente.nombre_propietario_real || '';
+        }
+        if (document.getElementById('telefonoPropietarioReal')) {
+            document.getElementById('telefonoPropietarioReal').value = datosCliente.telefono_propietario_real || '';
+        }
+    }
+    
+    // Trigger cambio en el radio para actualizar UI
+    if (radioTercero) {
+        radioTercero.dispatchEvent(new Event('change'));
+    }
+}
+
+// =====================================================
+// 🔥 OBTENER DATOS DE PROPIETARIO PARA ENVIAR AL BACKEND
+// =====================================================
+
+function obtenerDatosPropietario() {
+    const esPropietario = document.getElementById('tipoPropietarioRadio')?.checked || true;
+    const esTercero = !esPropietario;
+    
+    return {
+        es_propietario: esPropietario,
+        tipo_tercero: esTercero ? (document.getElementById('tipoTercero')?.value || null) : null,
+        nombre_tercero: esTercero ? (document.getElementById('nombreTercero')?.value || null) : null,
+        telefono_tercero: esTercero ? (document.getElementById('telefonoTercero')?.value || null) : null,
+        es_empresa: esTercero && (document.getElementById('tipoTercero')?.value === 'representante_empresa'),
+        nombre_empresa: esTercero ? (document.getElementById('nombreEmpresa')?.value || null) : null,
+        nit_empresa: esTercero ? (document.getElementById('nitEmpresa')?.value || null) : null,
+        nombre_propietario_real: esTercero ? (document.getElementById('nombrePropietarioReal')?.value || null) : null,
+        telefono_propietario_real: esTercero ? (document.getElementById('telefonoPropietarioReal')?.value || null) : null
+    };
+}
 
 // =====================================================
 // FUNCIONES GLOBALES

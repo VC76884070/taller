@@ -771,10 +771,6 @@ async function procesarCola() {
     setTimeout(procesarCola, 500);
 }
 
-// En recepcion.js - Función procesarFoto (CORREGIDA)
-
-// En recepcion.js - Función procesarFoto (CORREGIDA)
-
 async function procesarFoto(input, foto) {
     const file = input.files[0];
     if (!file) return;
@@ -1996,10 +1992,6 @@ async function recuperarSesionActiva() {
         localStorage.removeItem('sesion_actual');
     }
 }
-
-// =====================================================
-// FUNCIÓN COMPLETA: FINALIZAR SESIÓN CON REPORTE
-// =====================================================
 
 // =====================================================
 // FUNCIÓN COMPLETA: FINALIZAR SESIÓN CON REPORTE
@@ -3908,6 +3900,11 @@ function setupTranscripcionFormulario() {
         btnTranscribirForm.addEventListener('click', transcribirAudioFormulario);
     }
 }
+// =====================================================
+// DESCARGAR PDF - VERSIÓN NATIVA (SIN IMAGEN)
+// Las fotos mantienen su proporción, el texto es real
+// =====================================================
+
 async function descargarPDFFinal() {
     if (descargandoPDF) {
         mostrarNotificacion('⏳ Ya se está generando el PDF...', 'warning');
@@ -3927,753 +3924,582 @@ async function descargarPDFFinal() {
 
     if (btnDescargar) {
         btnDescargar.disabled = true;
-        btnDescargar.innerHTML =
-            '<i class="fas fa-spinner fa-spin"></i> Generando...';
+        btnDescargar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
     }
 
-    showProgress(
-        'Generando PDF',
-        'Preparando el documento...'
-    );
-
-    updateProgressBar(10);
-
-    let container = null;
+    showProgress('Generando PDF', 'Preparando documento...');
+    updateProgressBar(5);
 
     try {
+        // ============================================================
+        // 1. ASEGURAR QUE jsPDF ESTÁ CARGADO
+        // ============================================================
+        if (typeof window.jspdf === 'undefined' && typeof jspdf === 'undefined') {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        const { jsPDF } = window.jspdf || jspdf;
 
         // ============================================================
-        // 1. PREPARAR DATOS
+        // 2. PREPARAR DATOS
         // ============================================================
+        const detalle = JSON.parse(JSON.stringify(datosReporteFinal));
+        const fotos = detalle.fotos || {};
+        const comentarios = detalle.comentarios || {};
 
-        const detalleParaPDF =
-            JSON.parse(JSON.stringify(datosReporteFinal));
+        updateProgressMessage('Convirtiendo fotos...');
+        updateProgressBar(15);
 
-        const fotos =
-            datosReporteFinal.fotos || {};
+        // ============================================================
+        // 3. CONVERTIR FOTOS A BASE64
+        // ============================================================
+        const fotosBase64 = {};
 
-        const camposFotos = [
-            'url_lateral_izquierda',
-            'url_lateral_derecha',
-            'url_foto_frontal',
-            'url_foto_trasera',
-            'url_foto_superior',
-            'url_foto_inferior',
-            'url_foto_tablero'
+        // Fotos obligatorias
+        const camposObligatorios = [
+            { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo' },
+            { campo: 'url_lateral_derecha', label: 'Lateral Derecho' },
+            { campo: 'url_foto_frontal', label: 'Frontal' },
+            { campo: 'url_foto_trasera', label: 'Trasera' },
+            { campo: 'url_foto_superior', label: 'Superior' },
+            { campo: 'url_foto_inferior', label: 'Inferior' },
+            { campo: 'url_foto_tablero', label: 'Tablero' }
         ];
 
-        updateProgressMessage(
-            'Convirtiendo fotos...'
-        );
+        let contador = 0;
+        const totalFotos = camposObligatorios.length;
 
-
-        // ============================================================
-        // 2. CONVERTIR FOTOS
-        // ============================================================
-
-        const fotosNecesitanConversion =
-            camposFotos.filter(c => {
-
-                const url = fotos[c];
-
-                return (
-                    url &&
-                    url !== 'null' &&
-                    url !== 'None' &&
-                    url !== '' &&
-                    url !== null &&
-                    url !== 'undefined' &&
-                    !url.startsWith('data:image')
-                );
-            });
-
-
-        for (const campo of fotosNecesitanConversion) {
-
-            const url = fotos[campo];
-
-            try {
-
-                const base64 =
-                    await convertirImagenABase64(url);
-
-                if (
-                    base64 &&
-                    base64.startsWith('data:image')
-                ) {
-                    detalleParaPDF.fotos[campo] =
-                        base64;
+        for (const f of camposObligatorios) {
+            const url = fotos[f.campo];
+            if (url && url !== 'null' && url !== 'None' && url !== '' && url !== 'undefined') {
+                try {
+                    const base64 = await convertirImagenABase64(url);
+                    if (base64 && base64.startsWith('data:image')) {
+                        fotosBase64[f.campo] = { base64, label: f.label };
+                    }
+                } catch (e) {
+                    console.warn(`Error con ${f.campo}:`, e);
                 }
-
-            } catch (error) {
-
-                console.warn(
-                    `Error convirtiendo ${campo}:`,
-                    error
-                );
             }
+            contador++;
+            updateProgressBar(15 + (contador / totalFotos) * 30);
         }
 
-
-        detalleParaPDF.fotos_base64 =
-            detalleParaPDF.fotos;
-
-        updateProgressBar(40);
-
-
         // ============================================================
-        // 3. GENERAR HTML
+        // 4. CREAR PDF NATIVO (NO IMAGEN)
         // ============================================================
-
-        updateProgressMessage(
-            'Generando contenido del reporte...'
-        );
-
-        const reporteHTML =
-            generarHTMLReporte(
-                detalleParaPDF
-            );
-
-
-        // ============================================================
-        // 4. CREAR CONTENEDOR TEMPORAL
-        // ============================================================
-
-        container =
-            document.createElement('div');
-
-        container.id =
-            'pdfContainer';
-
-        container.style.cssText = `
-            position: fixed;
-            left: -9999px;
-            top: 0;
-
-            width: 780px;
-
-            padding: 0 !important;
-            margin: 0 !important;
-
-            background: white;
-
-            font-family: Arial, sans-serif;
-
-            z-index: -1;
-
-            opacity: 0;
-            pointer-events: none;
-
-            overflow: visible;
-        `;
-
-        container.innerHTML =
-            reporteHTML;
-
-        document.body.appendChild(
-            container
-        );
-
-
+        updateProgressMessage('Construyendo PDF...');
         updateProgressBar(50);
 
-        updateProgressMessage(
-            'Renderizando PDF...'
-        );
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'letter',
+            compress: true
+        });
 
-        await new Promise(resolve =>
-            setTimeout(resolve, 800)
-        );
+        // ---------- DIMENSIONES ----------
+        const PAGE_W = 215.9;  // Carta ancho en mm
+        const PAGE_H = 279.4;  // Carta alto en mm
+        const MARGEN = 12;
+        const ANCHO_UTIL = PAGE_W - MARGEN * 2;
+        let y = MARGEN;
 
+        // ---------- COLORES ----------
+        const COLOR_ROJO = [193, 18, 31];
+        const COLOR_GRIS_OSCURO = [60, 60, 60];
+        const COLOR_GRIS_TEXTO = [90, 90, 90];
+        const COLOR_GRIS_CLARO = [200, 200, 200];
+        const COLOR_GRIS_FONDO = [245, 245, 245];
+        const COLOR_NEGRO = [0, 0, 0];
+
+        // ---------- HEADER ----------
+        pdf.setFillColor(...COLOR_ROJO);
+        pdf.rect(0, 0, PAGE_W, 2, 'F');
+
+        pdf.setTextColor(...COLOR_ROJO);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(18);
+        pdf.text('FURIA', MARGEN, y + 6);
+        pdf.setTextColor(...COLOR_GRIS_OSCURO);
+        pdf.text('MOTOR', MARGEN + 23, y + 6);
+
+        pdf.setFontSize(7);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(...COLOR_GRIS_TEXTO);
+        pdf.text('TALLER AUTOMOTRIZ ESPECIALIZADO', MARGEN, y + 10);
+
+        // Info empresa derecha
+        pdf.setTextColor(...COLOR_ROJO);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8);
+        pdf.text('FURIA MOTOR COMPANY', PAGE_W - MARGEN, y + 4, { align: 'right' });
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7);
+        pdf.setTextColor(...COLOR_GRIS_TEXTO);
+        pdf.text('Cochabamba, Bolivia', PAGE_W - MARGEN, y + 7.5, { align: 'right' });
+        pdf.text('Tel: +591 4 1234567', PAGE_W - MARGEN, y + 11, { align: 'right' });
+
+        y += 15;
+
+        // Línea divisoria
+        pdf.setDrawColor(...COLOR_ROJO);
+        pdf.setLineWidth(0.5);
+        pdf.line(MARGEN, y, PAGE_W - MARGEN, y);
+        y += 6;
+
+        // ---------- TÍTULO ----------
+        pdf.setTextColor(...COLOR_ROJO);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(11);
+        pdf.text('ORDEN DE TRABAJO - RECEPCIÓN', PAGE_W / 2, y, { align: 'center' });
+        y += 5;
+
+        // Código
+        const codigoTexto = `# ${detalle.codigo_unico || 'OT-N/A'}`;
+        pdf.setFontSize(10);
+        pdf.setTextColor(...COLOR_GRIS_OSCURO);
+        pdf.text(codigoTexto, PAGE_W / 2, y, { align: 'center' });
+        y += 7;
+
+        // ---------- INFO GENERAL (barra gris) ----------
+        pdf.setFillColor(...COLOR_GRIS_FONDO);
+        pdf.rect(MARGEN, y, ANCHO_UTIL, 8, 'F');
+
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(...COLOR_GRIS_OSCURO);
+        const fechaIngreso = detalle.fecha_ingreso
+            ? new Date(detalle.fecha_ingreso).toLocaleString('es-ES')
+            : 'No registrada';
+        pdf.text(`Fecha: ${fechaIngreso}`, MARGEN + 3, y + 5);
+        pdf.text(`Estado: ${detalle.estado_global || 'En Recepción'}`, PAGE_W - MARGEN - 3, y + 5, { align: 'right' });
+        y += 12;
+
+        // ---------- FUNCIÓN AUXILIAR PARA DIBUJAR CAJA CON TÍTULO ----------
+        const dibujarCaja = (x, ancho, alto, titulo, lineas) => {
+            // Fondo
+            pdf.setFillColor(...COLOR_GRIS_FONDO);
+            pdf.rect(x, y, ancho, alto, 'F');
+
+            // Borde
+            pdf.setDrawColor(...COLOR_GRIS_CLARO);
+            pdf.setLineWidth(0.2);
+            pdf.rect(x, y, ancho, alto);
+
+            // Título
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(8.5);
+            pdf.setTextColor(...COLOR_ROJO);
+            pdf.text(titulo, x + 3, y + 5);
+
+            // Línea bajo título
+            pdf.setDrawColor(...COLOR_GRIS_CLARO);
+            pdf.line(x + 3, y + 6.5, x + ancho - 3, y + 6.5);
+
+            // Líneas de datos
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(8);
+            pdf.setTextColor(...COLOR_GRIS_OSCURO);
+
+            let lineY = y + 10.5;
+            for (const linea of lineas) {
+                pdf.text(linea, x + 3, lineY);
+                lineY += 4.2;
+            }
+        };
+
+        // ---------- DETECTAR TIPO DE CLIENTE ----------
+        const esPropietario = detalle.es_propietario !== false;
+        const esTercero = !esPropietario;
+        const esEmpresa = detalle.es_empresa === true;
+
+        const tipoTerceroLabels = {
+            'familiar': 'Familiar del dueño',
+            'representante_empresa': 'Representante de empresa',
+            'conductor': 'Conductor autorizado',
+            'amigo': 'Amigo del dueño',
+            'otro': 'Otro'
+        };
+        const tipoTerceroLabel = tipoTerceroLabels[detalle.tipo_tercero] || detalle.tipo_tercero || 'No especificado';
+
+        // ---------- DATOS DEL CLIENTE ----------
+        const anchoMitad = (ANCHO_UTIL - 4) / 2;
+
+        if (esPropietario) {
+            // Caso 1: Es dueño
+            dibujarCaja(MARGEN, anchoMitad, 32, '👤 DATOS DEL CLIENTE (Dueño)', [
+                `Nombre: ${detalle.cliente_nombre || 'No registrado'}`,
+                `Teléfono: ${detalle.cliente_telefono || 'No registrado'}`,
+                `Ubicación: ${(detalle.cliente_ubicacion || 'No especificada').substring(0, 55)}`,
+                detalle.cliente_ubicacion && detalle.cliente_ubicacion.length > 55
+                    ? (detalle.cliente_ubicacion.substring(55, 110) || '')
+                    : ''
+            ]);
+        } else {
+            // Caso 2: Es tercero
+            dibujarCaja(MARGEN, anchoMitad, 32, '👥 DATOS DEL TERCERO', [
+                `Nombre: ${detalle.nombre_tercero || detalle.cliente_nombre || 'No registrado'}`,
+                `Teléfono: ${detalle.telefono_tercero || detalle.cliente_telefono || 'No registrado'}`,
+                `Ubicación: ${(detalle.ubicacion_tercero || detalle.cliente_ubicacion || 'No especificada').substring(0, 55)}`,
+                `Tipo: ${tipoTerceroLabel}`
+            ]);
+        }
+
+        // ---------- DATOS DEL VEHÍCULO (columna derecha) ----------
+        const xDerecha = MARGEN + anchoMitad + 4;
+        dibujarCaja(xDerecha, anchoMitad, 32, '🚗 DATOS DEL VEHÍCULO', [
+            `Placa: ${detalle.placa || 'No registrada'}`,
+            `Marca: ${detalle.marca || 'No registrada'}`,
+            `Modelo: ${detalle.modelo || 'No registrado'}`,
+            `Año: ${detalle.anio || 'N/E'}  |  Km: ${detalle.kilometraje ? Number(detalle.kilometraje).toLocaleString() : '0'}`
+        ]);
+
+        y += 36;
+
+        // ---------- SI ES TERCERO, MOSTRAR EMPRESA O DUEÑO REAL ----------
+        if (esTercero) {
+            if (esEmpresa) {
+                // Empresa
+                dibujarCaja(MARGEN, ANCHO_UTIL, 25, '🏢 DATOS DE LA EMPRESA', [
+                    `Nombre: ${detalle.nombre_empresa || 'No especificada'}`,
+                    `NIT: ${detalle.nit_empresa || 'No especificado'}`,
+                    `Ubicación: ${(detalle.ubicacion_empresa || 'No especificada').substring(0, 90)}`
+                ]);
+                y += 29;
+            } else {
+                // Dueño real
+                dibujarCaja(MARGEN, ANCHO_UTIL, 25, '🔑 DATOS DEL DUEÑO REAL DEL VEHÍCULO', [
+                    `Nombre: ${detalle.nombre_propietario_real || 'No registrado'}`,
+                    `Teléfono: ${detalle.telefono_propietario_real || 'No registrado'}`,
+                    `Ubicación: ${(detalle.ubicacion_propietario_real || 'No especificada').substring(0, 90)}`
+                ]);
+                y += 29;
+            }
+        }
 
         // ============================================================
-        // 5. CARGAR html2canvas
+        // 5. FOTOS CON PROPORCIÓN CORRECTA
         // ============================================================
+        updateProgressMessage('Insertando fotos...');
+        updateProgressBar(70);
 
-        if (
-            typeof html2canvas ===
-            'undefined'
-        ) {
+        // Título de sección fotos
+        pdf.setFillColor(...COLOR_GRIS_FONDO);
+        pdf.rect(MARGEN, y, ANCHO_UTIL, 8, 'F');
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9);
+        pdf.setTextColor(...COLOR_ROJO);
 
-            await new Promise(
-                (resolve, reject) => {
+        const fotosValidas = Object.keys(fotosBase64).length;
+        pdf.text(`📸 REGISTRO FOTOGRÁFICO (${fotosValidas}/7)`, MARGEN + 3, y + 5.5);
+        y += 10;
 
-                    const script =
-                        document.createElement(
-                            'script'
-                        );
+        // Layout: 4 fotos arriba, 3 abajo (centradas)
+        const fotosArray = Object.entries(fotosBase64).map(([campo, data]) => ({
+            campo,
+            ...data
+        }));
 
-                    script.src =
-                        'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+        // Ancho de cada foto en mm
+        const gapFotos = 3;
+        const anchoFoto = (ANCHO_UTIL - gapFotos * 3) / 4;  // 4 columnas
+        const altoFoto = anchoFoto * 0.75;  // ratio 4:3 aprox (para no deformar)
 
-                    script.onload =
-                        resolve;
+        // Primera fila: 4 fotos
+        const primeraFila = fotosArray.slice(0, 4);
+        let xFoto = MARGEN;
 
-                    script.onerror =
-                        reject;
+        for (let i = 0; i < 4; i++) {
+            const f = primeraFila[i];
+            const xActual = MARGEN + i * (anchoFoto + gapFotos);
 
-                    document.head.appendChild(
-                        script
-                    );
+            if (f) {
+                try {
+                    // 🔥 addImage mantiene la proporción si le das width y height correctos
+                    // Calcular dimensiones reales de la imagen
+                    const img = new Image();
+                    await new Promise((resolve) => {
+                        img.onload = resolve;
+                        img.onerror = resolve;
+                        img.src = f.base64;
+                    });
+
+                    const imgAspect = img.height / img.width;
+                    let w = anchoFoto;
+                    let h = w * imgAspect;
+
+                    // Si es muy alto, ajustar
+                    if (h > altoFoto * 1.5) {
+                        h = altoFoto * 1.5;
+                        w = h / imgAspect;
+                    }
+
+                    // Dibujar caja de imagen con fondo gris claro
+                    pdf.setFillColor(240, 240, 240);
+                    pdf.rect(xActual, y, anchoFoto, altoFoto, 'F');
+
+                    // Centrar imagen en la caja
+                    const xImg = xActual + (anchoFoto - w) / 2;
+                    const yImg = y + (altoFoto - h) / 2;
+
+                    pdf.addImage(f.base64, 'JPEG', xImg, yImg, w, h);
+
+                    // Borde
+                    pdf.setDrawColor(...COLOR_GRIS_CLARO);
+                    pdf.setLineWidth(0.2);
+                    pdf.rect(xActual, y, anchoFoto, altoFoto);
+
+                    // Etiqueta
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setFontSize(6);
+                    pdf.setTextColor(...COLOR_GRIS_OSCURO);
+                    pdf.text(f.label, xActual + anchoFoto / 2, y + altoFoto + 3, { align: 'center' });
+
+                } catch (e) {
+                    console.warn(`Error insertando foto ${f.campo}:`, e);
                 }
-            );
+            } else {
+                // Placeholder vacío
+                pdf.setFillColor(250, 250, 250);
+                pdf.rect(xActual, y, anchoFoto, altoFoto, 'F');
+                pdf.setDrawColor(...COLOR_GRIS_CLARO);
+                pdf.setLineDashPattern([1, 1], 0);
+                pdf.rect(xActual, y, anchoFoto, altoFoto);
+                pdf.setLineDashPattern([], 0);
+
+                pdf.setFont('helvetica', 'normal');
+                pdf.setFontSize(7);
+                pdf.setTextColor(180, 180, 180);
+                pdf.text('Sin foto', xActual + anchoFoto / 2, y + altoFoto / 2, { align: 'center' });
+            }
         }
 
+        y += altoFoto + 6;
 
-        // ============================================================
-        // 6. CARGAR jsPDF
-        // ============================================================
+        // Segunda fila: 3 fotos centradas
+        const segundaFila = fotosArray.slice(4, 7);
 
-        if (
-            typeof jspdf ===
-                'undefined' &&
-            typeof window.jspdf ===
-                'undefined'
-        ) {
+        if (segundaFila.length > 0) {
+            const anchoFotoFila2 = anchoFoto;
+            const anchoTotalFila2 = anchoFotoFila2 * 3 + gapFotos * 2;
+            const xInicioFila2 = (PAGE_W - anchoTotalFila2) / 2;
 
-            await new Promise(
-                (resolve, reject) => {
+            for (let i = 0; i < 3; i++) {
+                const f = segundaFila[i];
+                const xActual = xInicioFila2 + i * (anchoFotoFila2 + gapFotos);
 
-                    const script =
-                        document.createElement(
-                            'script'
-                        );
+                if (f) {
+                    try {
+                        const img = new Image();
+                        await new Promise((resolve) => {
+                            img.onload = resolve;
+                            img.onerror = resolve;
+                            img.src = f.base64;
+                        });
 
-                    script.src =
-                        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                        const imgAspect = img.height / img.width;
+                        let w = anchoFotoFila2;
+                        let h = w * imgAspect;
 
-                    script.onload =
-                        resolve;
+                        if (h > altoFoto * 1.5) {
+                            h = altoFoto * 1.5;
+                            w = h / imgAspect;
+                        }
 
-                    script.onerror =
-                        reject;
+                        pdf.setFillColor(240, 240, 240);
+                        pdf.rect(xActual, y, anchoFotoFila2, altoFoto, 'F');
 
-                    document.head.appendChild(
-                        script
-                    );
-                }
-            );
-        }
+                        const xImg = xActual + (anchoFotoFila2 - w) / 2;
+                        const yImg = y + (altoFoto - h) / 2;
 
+                        pdf.addImage(f.base64, 'JPEG', xImg, yImg, w, h);
 
-        updateProgressBar(60);
+                        pdf.setDrawColor(...COLOR_GRIS_CLARO);
+                        pdf.setLineWidth(0.2);
+                        pdf.rect(xActual, y, anchoFotoFila2, altoFoto);
 
-        updateProgressMessage(
-            'Generando archivo PDF...'
-        );
+                        pdf.setFont('helvetica', 'bold');
+                        pdf.setFontSize(6);
+                        pdf.setTextColor(...COLOR_GRIS_OSCURO);
+                        pdf.text(f.label, xActual + anchoFotoFila2 / 2, y + altoFoto + 3, { align: 'center' });
 
-
-        // ============================================================
-        // 7. OBTENER REPORTE
-        // ============================================================
-
-        const elemento =
-            container.querySelector(
-                '.reporte-container'
-            );
-
-        if (!elemento) {
-            throw new Error(
-                'No se encontró el contenido del reporte'
-            );
-        }
-
-
-        // ============================================================
-        // 8. ASEGURAR QUE SE MUESTRE COMPLETO
-        // ============================================================
-
-        elemento.style.width =
-            '100%';
-
-        elemento.style.padding =
-            '0';
-
-        elemento.style.margin =
-            '0';
-
-        elemento.style.boxSizing =
-            'border-box';
-
-        elemento.style.height =
-            'auto';
-
-        elemento.style.overflow =
-            'visible';
-
-        elemento.style.maxHeight =
-            'none';
-
-
-        await new Promise(resolve =>
-            setTimeout(resolve, 300)
-        );
-
-
-        // ============================================================
-        // 9. DIMENSIONES
-        // ============================================================
-
-        const anchoContenido =
-            780;
-
-        const alturaContenido =
-            elemento.scrollHeight;
-
-
-        console.log(
-            `📄 Ancho contenido: ${anchoContenido}px`
-        );
-
-        console.log(
-            `📄 Alto contenido: ${alturaContenido}px`
-        );
-
-
-        // ============================================================
-        // 10. GENERAR CANVAS
-        // ============================================================
-
-        const canvas =
-            await html2canvas(
-                elemento,
-                {
-                    scale: 2,
-
-                    useCORS: true,
-
-                    allowTaint: true,
-
-                    backgroundColor:
-                        '#ffffff',
-
-                    logging: false,
-
-                    width:
-                        anchoContenido,
-
-                    height:
-                        alturaContenido + 10,
-
-                    scrollY: 0,
-
-                    scrollX: 0,
-
-                    windowHeight:
-                        alturaContenido + 10,
-
-                    windowWidth:
-                        anchoContenido,
-
-                    onclone: (
-                        clonedDoc,
-                        clonedElement
-                    ) => {
-
-                        clonedElement.style.height =
-                            'auto';
-
-                        clonedElement.style.overflow =
-                            'visible';
-
-                        clonedElement.style.maxHeight =
-                            'none';
-
-                        clonedElement.style.width =
-                            '100%';
-
-                        clonedElement.style.margin =
-                            '0';
-
-                        clonedElement.style.padding =
-                            '0';
+                    } catch (e) {
+                        console.warn(`Error insertando foto ${f.campo}:`, e);
                     }
                 }
-            );
-
-
-        console.log(
-            `📸 Canvas generado: ` +
-            `${canvas.width}x${canvas.height}px`
-        );
-
-
-        updateProgressBar(80);
-
-        updateProgressMessage(
-            'Convirtiendo a PDF...'
-        );
-
-
-        // ============================================================
-        // 11. CONFIGURACIÓN CARTA
-        // ============================================================
-
-        const { jsPDF } =
-            window.jspdf || jspdf;
-
-
-        // Carta = 215.9 x 279.4 mm
-        const CARTA_WIDTH_MM =
-            215.9;
-
-        const CARTA_HEIGHT_MM =
-            279.4;
-
-
-        // Márgenes pequeños
-        const MARGEN_LATERAL_MM =
-            7;
-
-        const MARGEN_SUPERIOR_MM =
-            7;
-
-        const MARGEN_INFERIOR_MM =
-            7;
-
-
-        // Área útil
-        const ANCHO_UTIL_MM =
-            CARTA_WIDTH_MM -
-            (MARGEN_LATERAL_MM * 2);
-
-        const ALTO_UTIL_MM =
-            CARTA_HEIGHT_MM -
-            MARGEN_SUPERIOR_MM -
-            MARGEN_INFERIOR_MM;
-
-
-        // ============================================================
-        // 12. CREAR PDF CARTA
-        // ============================================================
-
-        const pdf =
-            new jsPDF({
-                orientation: 'portrait',
-
-                unit: 'mm',
-
-                format: 'letter',
-
-                compress: true
-            });
-
-
-        // ============================================================
-        // 13. IMAGEN
-        // ============================================================
-
-        const imgData =
-            canvas.toDataURL(
-                'image/jpeg',
-                0.95
-            );
-
-
-        // ============================================================
-        // 14. AJUSTAR EL REPORTE AL RECTÁNGULO CARTA
-        // ============================================================
-        //
-        // IMPORTANTE:
-        //
-        // NO usamos 1.35x.
-        //
-        // El reporte debe entrar completamente en el ancho
-        // de la hoja.
-        //
-        // Como tú confirmaste que este reporte siempre tendrá
-        // la misma cantidad de información y debe ocupar una
-        // sola hoja, ajustamos el contenido al área completa.
-        //
-        // Esto evita:
-        //
-        // ❌ que se corte a los lados
-        // ❌ que aparezca fuera de la página
-        // ❌ que se genere una segunda página
-        //
-        // ============================================================
-
-        const imgWidthMm =
-            ANCHO_UTIL_MM;
-
-        const imgHeightMm =
-            ALTO_UTIL_MM;
-
-
-        // ============================================================
-        // 15. POSICIÓN
-        // ============================================================
-
-        const offsetX =
-            MARGEN_LATERAL_MM;
-
-        const offsetY =
-            MARGEN_SUPERIOR_MM;
-
-
-        // ============================================================
-        // 16. INFORMACIÓN DEBUG
-        // ============================================================
-
-        console.log(
-            '===================================='
-        );
-
-        console.log(
-            '📄 GENERANDO PDF CARTA'
-        );
-
-        console.log(
-            `📐 Hoja: ${CARTA_WIDTH_MM} x ${CARTA_HEIGHT_MM} mm`
-        );
-
-        console.log(
-            `📏 Área útil: ${ANCHO_UTIL_MM} x ${ALTO_UTIL_MM} mm`
-        );
-
-        console.log(
-            `🖼️ Reporte: ${imgWidthMm} x ${imgHeightMm} mm`
-        );
-
-        console.log(
-            `📍 Posición: X=${offsetX}, Y=${offsetY}`
-        );
-
-        console.log(
-            '===================================='
-        );
-
-
-        // ============================================================
-        // 17. AGREGAR REPORTE
-        // ============================================================
-
-        pdf.addImage(
-            imgData,
-            'JPEG',
-
-            offsetX,
-            offsetY,
-
-            imgWidthMm,
-            imgHeightMm
-        );
-
-
-        // ============================================================
-        // 18. OBTENER PDF COMO BLOB
-        // ============================================================
-
-        const pdfBlob =
-            pdf.output('blob');
-
-
-        updateProgressBar(90);
-
-        updateProgressMessage(
-            'Preparando para descargar...'
-        );
-
-
-        // ============================================================
-        // 19. DESCARGAR PDF
-        // ============================================================
-
-        const link =
-            document.createElement('a');
-
-        link.href =
-            URL.createObjectURL(
-                pdfBlob
-            );
-
-        link.download =
-            `Recepcion_${
-                detalleParaPDF.codigo_unico ||
-                'orden'
-            }.pdf`;
-
-        document.body.appendChild(
-            link
-        );
-
-        link.click();
-
-        document.body.removeChild(
-            link
-        );
-
-        URL.revokeObjectURL(
-            link.href
-        );
-
-
-        mostrarNotificacion(
-            '📥 PDF descargado',
-            'success'
-        );
-
-
-        // ============================================================
-        // 20. SUBIR A GOOGLE DRIVE
-        // ============================================================
-
-        updateProgressBar(95);
-
-        updateProgressMessage(
-            'Subiendo PDF a Google Drive...'
-        );
-
-
-        const reader =
-            new FileReader();
-
-
-        const pdfBase64 =
-            await new Promise(
-                (resolve) => {
-
-                    reader.onload =
-                        () => resolve(
-                            reader.result
-                        );
-
-                    reader.readAsDataURL(
-                        pdfBlob
-                    );
-                }
-            );
-
-
-        const response =
-            await fetchWithToken(
-                `${API_URL}/jefe-operativo/subir-pdf-recepcion`,
-                {
-                    method: 'POST',
-
-                    body:
-                        JSON.stringify({
-                            pdf_base64:
-                                pdfBase64,
-
-                            id_orden:
-                                detalleParaPDF.id ||
-                                detalleParaPDF.id_orden,
-
-                            codigo_unico:
-                                detalleParaPDF.codigo_unico ||
-                                'orden'
-                        })
-                }
-            );
-
-
-        if (!response.ok) {
-
-            const errorData =
-                await response.json();
-
-            throw new Error(
-                errorData.error ||
-                'Error al subir PDF a Drive'
-            );
-        }
-
-
-        const data =
-            await response.json();
-
-
-        // ============================================================
-        // 21. FINALIZAR
-        // ============================================================
-
-        updateProgressBar(100);
-
-        updateProgressMessage(
-            '¡PDF guardado en Google Drive!'
-        );
-
-
-        // ============================================================
-        // 22. LIMPIAR CONTENEDOR
-        // ============================================================
-
-        setTimeout(() => {
-
-            if (
-                container &&
-                document.body.contains(
-                    container
-                )
-            ) {
-
-                document.body.removeChild(
-                    container
-                );
             }
 
-        }, 1000);
+            y += altoFoto + 8;
+        }
 
+        // ============================================================
+        // 6. DESCRIPCIÓN
+        // ============================================================
+        const descripcionTexto = detalle.transcripcion_problema || 'No se registró descripción';
 
-        mostrarNotificacion(
-            '✅ PDF guardado en Google Drive',
-            'success'
+        // Calcular altura de la caja según líneas de texto
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        const maxAnchoTexto = ANCHO_UTIL - 6;
+        const lineasDesc = pdf.splitTextToSize(descripcionTexto, maxAnchoTexto);
+        const altoDesc = Math.max(18, lineasDesc.length * 4 + 12);
+
+        dibujarCaja(MARGEN, ANCHO_UTIL, altoDesc, '📝 DESCRIPCIÓN DEL PROBLEMA', []);
+        y += 8.5;
+
+        // Texto de descripción
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.setTextColor(...COLOR_GRIS_OSCURO);
+        pdf.text(lineasDesc, MARGEN + 3, y + 2);
+        y += altoDesc - 6;
+
+        y += 4;
+
+        // ============================================================
+        // 7. FIRMAS
+        // ============================================================
+        // Verificar si hay espacio, sino nueva página
+        if (y > PAGE_H - 50) {
+            pdf.addPage();
+            y = MARGEN;
+        }
+
+        pdf.setDrawColor(...COLOR_GRIS_CLARO);
+        pdf.setLineWidth(0.3);
+        pdf.line(MARGEN, y, PAGE_W - MARGEN, y);
+        y += 4;
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9);
+        pdf.setTextColor(...COLOR_ROJO);
+        pdf.text('FIRMAS DE CONFORMIDAD', PAGE_W / 2, y, { align: 'center' });
+        y += 10;
+
+        // Firma cliente (izquierda)
+        const firmaY = y + 25;
+        pdf.setDrawColor(...COLOR_NEGRO);
+        pdf.setLineWidth(0.4);
+        pdf.line(MARGEN + 10, firmaY, MARGEN + 80, firmaY);
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(7);
+        pdf.setTextColor(...COLOR_GRIS_OSCURO);
+        pdf.text('FIRMA DEL CLIENTE', MARGEN + 45, y + 4, { align: 'center' });
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.text(detalle.cliente_nombre || '____________________', MARGEN + 45, firmaY + 5, { align: 'center' });
+
+        const fechaActual = new Date().toLocaleDateString('es-ES');
+        pdf.setFontSize(7);
+        pdf.setTextColor(...COLOR_GRIS_TEXTO);
+        pdf.text(fechaActual, MARGEN + 45, firmaY + 10, { align: 'center' });
+
+        // Firma jefe (derecha)
+        const xFirmaJefe = PAGE_W - MARGEN - 80;
+        pdf.setDrawColor(...COLOR_NEGRO);
+        pdf.setLineWidth(0.4);
+        pdf.line(xFirmaJefe, firmaY, xFirmaJefe + 70, firmaY);
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(7);
+        pdf.setTextColor(...COLOR_GRIS_OSCURO);
+        pdf.text('FIRMA DEL JEFE OPERATIVO', xFirmaJefe + 35, y + 4, { align: 'center' });
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.text(detalle.jefe_operativo?.nombre || '____________________', xFirmaJefe + 35, firmaY + 5, { align: 'center' });
+
+        pdf.setFontSize(7);
+        pdf.setTextColor(...COLOR_GRIS_TEXTO);
+        pdf.text(fechaActual, xFirmaJefe + 35, firmaY + 10, { align: 'center' });
+
+        // ============================================================
+        // 8. FOOTER
+        // ============================================================
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(6.5);
+        pdf.setTextColor(180, 180, 180);
+        pdf.text(
+            `Documento generado por FURIA MOTOR - ${new Date().toLocaleString('es-ES')}`,
+            PAGE_W / 2,
+            PAGE_H - 6,
+            { align: 'center' }
         );
 
+        // ============================================================
+        // 9. GUARDAR Y DESCARGAR
+        // ============================================================
+        updateProgressBar(90);
+        updateProgressMessage('Descargando...');
 
-        setTimeout(
-            () => completeProgress(true),
-            500
+        const nombreArchivo = `Recepcion_${detalle.codigo_unico || 'orden'}.pdf`;
+        const pdfBlob = pdf.output('blob');
+
+        // Descargar localmente
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(pdfBlob);
+        link.download = nombreArchivo;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+
+        mostrarNotificacion('📥 PDF descargado', 'success');
+
+        // ============================================================
+        // 10. SUBIR A GOOGLE DRIVE
+        // ============================================================
+        updateProgressBar(95);
+        updateProgressMessage('Subiendo a Drive...');
+
+        const reader = new FileReader();
+        const pdfBase64 = await new Promise((resolve) => {
+            reader.onload = () => resolve(reader.result);
+            reader.readAsDataURL(pdfBlob);
+        });
+
+        const response = await fetchWithToken(
+            `${API_URL}/jefe-operativo/subir-pdf-recepcion`,
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    pdf_base64: pdfBase64,
+                    id_orden: detalle.id || detalle.id_orden,
+                    codigo_unico: detalle.codigo_unico || 'orden'
+                })
+            }
         );
 
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Error al subir a Drive');
+        }
+
+        updateProgressBar(100);
+        updateProgressMessage('¡Listo!');
+
+        mostrarNotificacion('✅ PDF guardado en Drive', 'success');
+        setTimeout(() => completeProgress(true), 500);
 
     } catch (error) {
-
-        console.error(
-            'Error generando PDF:',
-            error
-        );
-
-
+        console.error('Error generando PDF:', error);
         completeProgress(false);
-
-
-        mostrarNotificacion(
-            '❌ Error al generar PDF: ' +
-            error.message,
-            'error'
-        );
-
-
-        // Limpiar si ocurrió un error
-        if (
-            container &&
-            document.body.contains(
-                container
-            )
-        ) {
-
-            document.body.removeChild(
-                container
-            );
-        }
+        mostrarNotificacion('❌ Error: ' + error.message, 'error');
     }
-
-
-    // ============================================================
-    // 23. RESTAURAR BOTÓN
-    // ============================================================
 
     if (btnDescargar) {
-
-        btnDescargar.disabled =
-            false;
-
-        btnDescargar.innerHTML =
-            '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
+        btnDescargar.disabled = false;
+        btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
     }
-
 
     descargandoPDF = false;
 }
@@ -5874,10 +5700,6 @@ function setupUnirsePorCodigo() {
     });
     modalUnirse?.addEventListener('click', (e) => { if (e.target === modalUnirse) cerrarModal(); });
 }
-
-// =====================================================
-// SETUP PHOTO UPLOADS (CON ELIMINACIÓN DE DRIVE CORREGIDA)
-// =====================================================
 // =====================================================
 // SETUP PHOTO UPLOADS (CON ELIMINACIÓN DE DRIVE CORREGIDA)
 // =====================================================

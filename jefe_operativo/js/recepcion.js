@@ -3008,10 +3008,8 @@ async function verDetalleRecepcion(id) {
     }
 }
 
-// En recepcion.js - Función mostrarModalDetalle (MODIFICADA)
-
 // =====================================================
-// MOSTRAR MODAL DETALLE (CON FOTOS OPCIONALES Y COMENTARIOS)
+// MOSTRAR MODAL DETALLE (CON PROPIETARIO/TERCERO/EMPRESA)
 // =====================================================
 
 function mostrarModalDetalle(detalle) {
@@ -3037,7 +3035,7 @@ function mostrarModalDetalle(detalle) {
     ];
     
     // =============================================
-    // FOTOS OPCIONALES (10) - Generar dinámicamente
+    // FOTOS OPCIONALES (10)
     // =============================================
     const camposOpcionales = [];
     for (let i = 1; i <= 10; i++) {
@@ -3048,14 +3046,12 @@ function mostrarModalDetalle(detalle) {
         });
     }
     
-    // Filtrar fotos obligatorias existentes
     const fotosObligatoriasExistentes = camposFotosObligatorias.filter(f => {
         const url = fotos[f.campo];
         return url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined';
     });
     const fotosObligatoriasCount = fotosObligatoriasExistentes.length;
     
-    // Filtrar fotos opcionales existentes
     const fotosOpcionalesExistentes = camposOpcionales.filter(f => {
         const url = fotos[f.campo];
         return url && url !== 'null' && url !== 'None' && url !== '' && url !== null && url !== 'undefined';
@@ -3070,7 +3066,6 @@ function mostrarModalDetalle(detalle) {
     } else {
         const timestamp = Date.now();
         fotosObligatoriasHtml = `<div class="detalle-fotos-grid">${fotosObligatoriasExistentes.map((f, index) => {
-            const url = fotos[f.campo];
             const imgId = `foto-${f.campo}-${timestamp}-${index}`;
             return `<div class="detalle-foto" onclick="verImagenAmpliadaPorId('${imgId}', '${f.label}')">
                 <div id="${imgId}" class="detalle-foto-placeholder"><i class="fas fa-spinner fa-spin"></i><span>Cargando...</span></div>
@@ -3088,10 +3083,7 @@ function mostrarModalDetalle(detalle) {
     } else {
         const timestamp = Date.now();
         fotosOpcionalesHtml = `<div class="detalle-opcionales-grid">${fotosOpcionalesExistentes.map((f, index) => {
-            const url = fotos[f.campo];
             const imgId = `foto-${f.campo}-${timestamp}-${index}`;
-            
-            // Obtener el comentario correspondiente
             const comentario = comentarios[f.comentario_campo] || '';
             
             return `<div class="detalle-foto-opcional" onclick="verImagenAmpliadaPorId('${imgId}', '${f.label}')">
@@ -3102,6 +3094,146 @@ function mostrarModalDetalle(detalle) {
                 ${comentario ? `<div class="detalle-foto-comentario"><i class="fas fa-quote-left"></i> ${escapeHtml(comentario)}</div>` : ''}
             </div>`;
         }).join('')}</div>`;
+    }
+    
+    // =============================================
+    // 🔥 CONSTRUIR SECCIÓN DE CLIENTE DINÁMICAMENTE
+    // =============================================
+    const esPropietario = detalle.es_propietario !== false;
+    const esTercero = !esPropietario;
+    const esEmpresa = detalle.es_empresa === true;
+    
+    const tipoTerceroLabels = {
+        'familiar': '👨‍👩‍👧 Familiar del dueño',
+        'representante_empresa': '🏢 Representante de empresa',
+        'conductor': '🚗 Conductor autorizado',
+        'amigo': '🤝 Amigo del dueño',
+        'otro': '📝 Otro'
+    };
+    const tipoTerceroLabel = tipoTerceroLabels[detalle.tipo_tercero] || detalle.tipo_tercero || 'No especificado';
+    
+    let seccionClienteHtml = '';
+    
+    if (esPropietario) {
+        // =============================================
+        // CASO 1: ES EL DUEÑO
+        // =============================================
+        seccionClienteHtml = `
+            <div class="detalle-card">
+                <div class="detalle-card-title">
+                    <i class="fas fa-user"></i> Datos del Cliente (Dueño)
+                    <span class="detalle-badge" style="background: rgba(16, 185, 129, 0.15); color: #10B981; padding: 2px 10px; border-radius: 12px; font-size: 10px; margin-left: 8px;">
+                        ✓ Propietario
+                    </span>
+                </div>
+                <div class="detalle-grid">
+                    <div class="detalle-item">
+                        <span class="detalle-label">Nombre</span>
+                        <span class="detalle-value">${escapeHtml(detalle.cliente_nombre || 'N/A')}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Teléfono</span>
+                        <span class="detalle-value">${escapeHtml(detalle.cliente_telefono || 'N/A')}</span>
+                    </div>
+                    <div class="detalle-item full-width">
+                        <span class="detalle-label">Ubicación</span>
+                        <span class="detalle-value">${escapeHtml(detalle.cliente_ubicacion || 'No especificada')}</span>
+                    </div>
+                    ${detalle.latitud && detalle.longitud ? `
+                    <div class="detalle-item full-width">
+                        <span class="detalle-label">Coordenadas</span>
+                        <span class="detalle-value">${detalle.latitud}, ${detalle.longitud}</span>
+                    </div>` : ''}
+                </div>
+            </div>
+        `;
+        
+    } else {
+        // =============================================
+        // CASO 2: ES UN TERCERO
+        // =============================================
+        
+        let seccionEmpresaHtml = '';
+        let seccionDuenioRealHtml = '';
+        
+        if (esEmpresa) {
+            // Sub-caso 2a: Tercero es representante de empresa
+            seccionEmpresaHtml = `
+                <div class="detalle-card" style="border-left: 3px solid #2563EB;">
+                    <div class="detalle-card-title" style="color: #2563EB;">
+                        <i class="fas fa-building"></i> Datos de la Empresa
+                    </div>
+                    <div class="detalle-grid">
+                        <div class="detalle-item">
+                            <span class="detalle-label">Nombre de la empresa</span>
+                            <span class="detalle-value">${escapeHtml(detalle.nombre_empresa || 'No especificada')}</span>
+                        </div>
+                        <div class="detalle-item">
+                            <span class="detalle-label">NIT</span>
+                            <span class="detalle-value">${escapeHtml(detalle.nit_empresa || 'No especificado')}</span>
+                        </div>
+                        <div class="detalle-item full-width">
+                            <span class="detalle-label">Ubicación de la empresa</span>
+                            <span class="detalle-value">${escapeHtml(detalle.ubicacion_empresa || 'No especificada')}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Sub-caso 2b: Tercero normal → mostrar dueño real
+            seccionDuenioRealHtml = `
+                <div class="detalle-card" style="border-left: 3px solid #10B981;">
+                    <div class="detalle-card-title" style="color: #10B981;">
+                        <i class="fas fa-user-check"></i> Datos del Dueño Real del Vehículo
+                    </div>
+                    <div class="detalle-grid">
+                        <div class="detalle-item">
+                            <span class="detalle-label">Nombre del dueño</span>
+                            <span class="detalle-value">${escapeHtml(detalle.nombre_propietario_real || 'N/A')}</span>
+                        </div>
+                        <div class="detalle-item">
+                            <span class="detalle-label">Teléfono del dueño</span>
+                            <span class="detalle-value">${escapeHtml(detalle.telefono_propietario_real || 'N/A')}</span>
+                        </div>
+                        <div class="detalle-item full-width">
+                            <span class="detalle-label">Ubicación del dueño</span>
+                            <span class="detalle-value">${escapeHtml(detalle.ubicacion_propietario_real || 'No especificada')}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        seccionClienteHtml = `
+            <div class="detalle-card" style="border-left: 3px solid #C1121F;">
+                <div class="detalle-card-title">
+                    <i class="fas fa-user-friends"></i> Datos del Tercero (quien trae el vehículo)
+                    <span class="detalle-badge" style="background: rgba(193, 18, 31, 0.15); color: #C1121F; padding: 2px 10px; border-radius: 12px; font-size: 10px; margin-left: 8px;">
+                        👥 Tercero
+                    </span>
+                </div>
+                <div class="detalle-grid">
+                    <div class="detalle-item">
+                        <span class="detalle-label">Nombre del tercero</span>
+                        <span class="detalle-value">${escapeHtml(detalle.nombre_tercero || detalle.cliente_nombre || 'N/A')}</span>
+                    </div>
+                    <div class="detalle-item">
+                        <span class="detalle-label">Teléfono del tercero</span>
+                        <span class="detalle-value">${escapeHtml(detalle.telefono_tercero || detalle.cliente_telefono || 'N/A')}</span>
+                    </div>
+                    <div class="detalle-item full-width">
+                        <span class="detalle-label">Ubicación del tercero</span>
+                        <span class="detalle-value">${escapeHtml(detalle.ubicacion_tercero || detalle.cliente_ubicacion || 'No especificada')}</span>
+                    </div>
+                    <div class="detalle-item full-width">
+                        <span class="detalle-label">Tipo de tercero</span>
+                        <span class="detalle-value">${escapeHtml(tipoTerceroLabel)}</span>
+                    </div>
+                </div>
+            </div>
+            ${seccionEmpresaHtml}
+            ${seccionDuenioRealHtml}
+        `;
     }
     
     // =============================================
@@ -3118,10 +3250,6 @@ function mostrarModalDetalle(detalle) {
         else {
             const match2 = audioUrl.match(/\/file\/d\/([^\/]+)/);
             if (match2) fileId = match2[1];
-            else {
-                const match3 = audioUrl.match(/\/d\/([^\/]+)/);
-                if (match3) fileId = match3[1];
-            }
         }
         
         if (fileId) {
@@ -3156,15 +3284,9 @@ function mostrarModalDetalle(detalle) {
     }
     
     // =============================================
-    // DESCRIPCIÓN CON BOTÓN DE TRANSCRIPCIÓN
+    // DESCRIPCIÓN
     // =============================================
-    const tieneAudioParaTranscribir = detalle.audio_url && 
-                                      detalle.audio_url !== 'null' && 
-                                      detalle.audio_url !== 'None' && 
-                                      detalle.audio_url !== '' && 
-                                      detalle.audio_url !== null && 
-                                      detalle.audio_url !== 'undefined';
-    
+    const tieneAudioParaTranscribir = tieneAudio;
     const transcripcionActual = detalle.transcripcion_problema || 'No se registró descripción';
     
     const descripcionHtml = `
@@ -3205,14 +3327,10 @@ function mostrarModalDetalle(detalle) {
                     ${detalle.jefe_operativo_2?.nombre ? `<div class="detalle-item full-width"><span class="detalle-label">Jefe Operativo 2</span><span class="detalle-value">${escapeHtml(detalle.jefe_operativo_2.nombre)}</span></div>` : ''}
                 </div>
             </div>
-            <div class="detalle-card"><div class="detalle-card-title"><i class="fas fa-user"></i> Datos del Cliente</div>
-                <div class="detalle-grid">
-                    <div class="detalle-item"><span class="detalle-label">Nombre</span><span class="detalle-value">${escapeHtml(detalle.cliente_nombre || 'N/A')}</span></div>
-                    <div class="detalle-item"><span class="detalle-label">Teléfono</span><span class="detalle-value">${escapeHtml(detalle.cliente_telefono || 'N/A')}</span></div>
-                    <div class="detalle-item full-width"><span class="detalle-label">Ubicación</span><span class="detalle-value">${escapeHtml(detalle.cliente_ubicacion || 'No especificada')}</span></div>
-                    ${detalle.latitud && detalle.longitud ? `<div class="detalle-item full-width"><span class="detalle-label">Coordenadas</span><span class="detalle-value">${detalle.latitud}, ${detalle.longitud}</span></div>` : ''}
-                </div>
-            </div>
+            
+            <!-- 🔥 SECCIÓN DE CLIENTE DINÁMICA (PROPIETARIO / TERCERO / EMPRESA) -->
+            ${seccionClienteHtml}
+            
             <div class="detalle-card"><div class="detalle-card-title"><i class="fas fa-car"></i> Datos del Vehículo</div>
                 <div class="detalle-grid">
                     <div class="detalle-item"><span class="detalle-label">Placa</span><span class="detalle-value placa">${escapeHtml(detalle.placa || 'N/A')}</span></div>
@@ -3224,7 +3342,6 @@ function mostrarModalDetalle(detalle) {
             </div>
         </div>
         <div class="detalle-pane" id="pane-fotos">
-            <!-- FOTOS OBLIGATORIAS -->
             <div class="detalle-subseccion">
                 <div class="detalle-subseccion-titulo">
                     <i class="fas fa-star" style="color:#C1121F;"></i>
@@ -3233,7 +3350,6 @@ function mostrarModalDetalle(detalle) {
                 ${fotosObligatoriasHtml}
             </div>
             
-            <!-- FOTOS OPCIONALES CON COMENTARIOS -->
             <div class="detalle-subseccion detalle-subseccion-opcional">
                 <div class="detalle-subseccion-titulo">
                     <i class="fas fa-plus-circle" style="color:#6B7280;"></i>
@@ -3264,7 +3380,6 @@ function mostrarModalDetalle(detalle) {
             if (activePane) activePane.classList.add('active');
             
             if (tabId === 'fotos') {
-                // Cargar todas las fotos (obligatorias y opcionales)
                 setTimeout(() => cargarTodasLasFotos(detalle.fotos), 200);
             }
         });
@@ -4579,7 +4694,11 @@ function generarHTMLReporte(detalle) {
                 'FOTO TRASERA': 'Trasera',
                 'FOTO SUPERIOR': 'Superior',
                 'FOTO INFERIOR': 'Inferior',
-                'FOTO TABLERO': 'Tablero'
+                'FOTO TABLERO': 'Tablero',
+                'OPCIONAL1': 'Adic. 1', 'OPCIONAL2': 'Adic. 2', 'OPCIONAL3': 'Adic. 3',
+                'OPCIONAL4': 'Adic. 4', 'OPCIONAL5': 'Adic. 5', 'OPCIONAL6': 'Adic. 6',
+                'OPCIONAL7': 'Adic. 7', 'OPCIONAL8': 'Adic. 8', 'OPCIONAL9': 'Adic. 9',
+                'OPCIONAL10': 'Adic. 10'
             };
             label = labelsMap[label] || label;
             return { campo: key, label, url };
@@ -4591,9 +4710,85 @@ function generarHTMLReporte(detalle) {
     const jefeNombre1 = detalle.jefe_operativo?.nombre || 'No asignado';
     const jefeNombre2 = detalle.jefe_operativo_2?.nombre || null;
 
-    // ============================================================
-    // HTML MEJORADO - 2 LINEAS DE FOTOS Y FIRMAS CON MÁS ESPACIO
-    // ============================================================
+    // ============================================
+    // 🔥 DETECTAR TIPO DE CLIENTE
+    // ============================================
+    const esPropietario = detalle.es_propietario !== false;
+    const esTercero = !esPropietario;
+    const esEmpresa = detalle.es_empresa === true;
+    
+    const tipoTerceroLabels = {
+        'familiar': 'Familiar del dueño',
+        'representante_empresa': 'Representante de empresa',
+        'conductor': 'Conductor autorizado',
+        'amigo': 'Amigo del dueño',
+        'otro': 'Otro'
+    };
+    const tipoTerceroLabel = tipoTerceroLabels[detalle.tipo_tercero] || detalle.tipo_tercero || 'No especificado';
+
+    // ============================================
+    // 🔥 CONSTRUIR BLOQUE DE CLIENTE
+    // ============================================
+    let bloqueClienteHtml = '';
+    
+    if (esPropietario) {
+        // CASO 1: ES DUEÑO
+        bloqueClienteHtml = `
+            <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; border:1px solid #eee;">
+                <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:3px; border-bottom:1px solid #ddd; padding-bottom:2px;">👤 Datos del Cliente (Dueño)</div>
+                <div style="font-size:8.5px; line-height:1.6;">
+                    <div><strong>Nombre:</strong> ${detalle.cliente_nombre || 'No registrado'}</div>
+                    <div><strong>Teléfono:</strong> ${detalle.cliente_telefono || 'No registrado'}</div>
+                    <div><strong>Ubicación:</strong> ${detalle.cliente_ubicacion || 'No especificada'}</div>
+                </div>
+            </div>
+        `;
+    } else {
+        // CASO 2: ES TERCERO
+        let bloqueEmpresaHtml = '';
+        let bloqueDuenioRealHtml = '';
+        
+        if (esEmpresa) {
+            // Sub-caso 2a: Empresa
+            bloqueEmpresaHtml = `
+                <div style="background:#eff6ff; border-radius:4px; padding:5px 10px; border:1px solid #bfdbfe; margin-top:4px;">
+                    <div style="font-weight:700; font-size:8.5px; color:#2563EB; margin-bottom:3px; border-bottom:1px solid #bfdbfe; padding-bottom:2px;">🏢 Datos de la Empresa</div>
+                    <div style="font-size:8.5px; line-height:1.6;">
+                        <div><strong>Nombre empresa:</strong> ${detalle.nombre_empresa || 'No especificada'}</div>
+                        <div><strong>NIT:</strong> ${detalle.nit_empresa || 'No especificado'}</div>
+                        <div><strong>Ubicación:</strong> ${detalle.ubicacion_empresa || 'No especificada'}</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Sub-caso 2b: Dueño real
+            bloqueDuenioRealHtml = `
+                <div style="background:#f0fdf4; border-radius:4px; padding:5px 10px; border:1px solid #bbf7d0; margin-top:4px;">
+                    <div style="font-weight:700; font-size:8.5px; color:#10B981; margin-bottom:3px; border-bottom:1px solid #bbf7d0; padding-bottom:2px;">🔑 Datos del Dueño Real</div>
+                    <div style="font-size:8.5px; line-height:1.6;">
+                        <div><strong>Nombre:</strong> ${detalle.nombre_propietario_real || 'No registrado'}</div>
+                        <div><strong>Teléfono:</strong> ${detalle.telefono_propietario_real || 'No registrado'}</div>
+                        <div><strong>Ubicación:</strong> ${detalle.ubicacion_propietario_real || 'No especificada'}</div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        bloqueClienteHtml = `
+            <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; border:1px solid #eee;">
+                <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:3px; border-bottom:1px solid #ddd; padding-bottom:2px;">👥 Datos del Tercero</div>
+                <div style="font-size:8.5px; line-height:1.6;">
+                    <div><strong>Nombre:</strong> ${detalle.nombre_tercero || detalle.cliente_nombre || 'No registrado'}</div>
+                    <div><strong>Teléfono:</strong> ${detalle.telefono_tercero || detalle.cliente_telefono || 'No registrado'}</div>
+                    <div><strong>Ubicación:</strong> ${detalle.ubicacion_tercero || detalle.cliente_ubicacion || 'No especificada'}</div>
+                    <div><strong>Tipo de tercero:</strong> ${tipoTerceroLabel}</div>
+                </div>
+            </div>
+            ${bloqueEmpresaHtml}
+            ${bloqueDuenioRealHtml}
+        `;
+    }
+
     return `<div class="reporte-container" style="
         width: 100%;
         max-width: 780px;
@@ -4640,14 +4835,7 @@ function generarHTMLReporte(detalle) {
         <!-- CLIENTE + VEHÍCULO (2 COLUMNAS) -->
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:6px;">
             <!-- CLIENTE -->
-            <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; border:1px solid #eee;">
-                <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:3px; border-bottom:1px solid #ddd; padding-bottom:2px;">👤 Datos del Cliente</div>
-                <div style="font-size:8.5px; line-height:1.6;">
-                    <div><strong>Nombre:</strong> ${detalle.cliente_nombre || 'No registrado'}</div>
-                    <div><strong>Teléfono:</strong> ${detalle.cliente_telefono || 'No registrado'}</div>
-                    <div><strong>Ubicación:</strong> ${detalle.cliente_ubicacion || 'No especificada'}</div>
-                </div>
-            </div>
+            ${bloqueClienteHtml}
             
             <!-- VEHÍCULO -->
             <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; border:1px solid #eee;">
@@ -4661,28 +4849,14 @@ function generarHTMLReporte(detalle) {
             </div>
         </div>
         
-        <!-- 🔥 FOTOS - 2 LÍNEAS: 4 + 3 CENTRADAS -->
+        <!-- FOTOS - 2 LÍNEAS: 4 + 3 CENTRADAS -->
         <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; margin-bottom:6px; border:1px solid #eee;">
             <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:4px; border-bottom:1px solid #ddd; padding-bottom:2px;">📸 Fotos (${fotosArray.length}/7)</div>
             ${fotosArray.length > 0 ? `
-                <!-- PRIMERA FILA: 4 FOTOS -->
                 <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:4px; margin-bottom:3px;">
                     ${fotosArray.slice(0, 4).map(f => `
-                        <div style="
-                            border:1px solid #ddd; 
-                            border-radius:4px; 
-                            overflow:hidden; 
-                            background:#f5f5f5; 
-                            text-align:center;
-                        ">
-                            <img src="${f.url}" alt="${f.label}" style="
-                                width:100%; 
-                                height:65px; 
-                                object-fit:cover; 
-                                display:block; 
-                                background:#eee;
-                                border-bottom:1px solid #ddd;
-                            " onerror="this.style.display='none'">
+                        <div style="border:1px solid #ddd; border-radius:4px; overflow:hidden; background:#f5f5f5; text-align:center;">
+                            <img src="${f.url}" alt="${f.label}" style="width:100%; height:65px; object-fit:cover; display:block; background:#eee; border-bottom:1px solid #ddd;" onerror="this.style.display='none'">
                             <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f9f9f9;">${f.label}</div>
                         </div>
                     `).join('')}
@@ -4692,25 +4866,11 @@ function generarHTMLReporte(detalle) {
                         </div>
                     `).join('') : ''}
                 </div>
-                <!-- SEGUNDA FILA: 3 FOTOS CENTRADAS -->
                 ${fotosArray.length > 4 ? `
                     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; max-width:75%; margin:0 auto;">
                         ${fotosArray.slice(4, 7).map(f => `
-                            <div style="
-                                border:1px solid #ddd; 
-                                border-radius:4px; 
-                                overflow:hidden; 
-                                background:#f5f5f5; 
-                                text-align:center;
-                            ">
-                                <img src="${f.url}" alt="${f.label}" style="
-                                    width:100%; 
-                                    height:65px; 
-                                    object-fit:cover; 
-                                    display:block; 
-                                    background:#eee;
-                                    border-bottom:1px solid #ddd;
-                                " onerror="this.style.display='none'">
+                            <div style="border:1px solid #ddd; border-radius:4px; overflow:hidden; background:#f5f5f5; text-align:center;">
+                                <img src="${f.url}" alt="${f.label}" style="width:100%; height:65px; object-fit:cover; display:block; background:#eee; border-bottom:1px solid #ddd;" onerror="this.style.display='none'">
                                 <div style="padding:2px; font-size:6px; font-weight:bold; color:#555; background:#f9f9f9;">${f.label}</div>
                             </div>
                         `).join('')}
@@ -4722,30 +4882,19 @@ function generarHTMLReporte(detalle) {
         <!-- DESCRIPCIÓN -->
         <div style="background:#f8f8f8; border-radius:4px; padding:5px 10px; margin-bottom:6px; border:1px solid #eee;">
             <div style="font-weight:700; font-size:8.5px; color:#C1121F; margin-bottom:3px; border-bottom:1px solid #ddd; padding-bottom:2px;">📝 Descripción del Problema</div>
-            <div style="
-                background:white; 
-                padding:5px 8px; 
-                border-radius:4px; 
-                font-size:8.5px; 
-                min-height:22px; 
-                border:1px solid #e8e8e8; 
-                white-space:pre-wrap; 
-                line-height:1.5;
-            ">${detalle.transcripcion_problema || 'No se registró descripción'}</div>
+            <div style="background:white; padding:5px 8px; border-radius:4px; font-size:8.5px; min-height:22px; border:1px solid #e8e8e8; white-space:pre-wrap; line-height:1.5;">${detalle.transcripcion_problema || 'No se registró descripción'}</div>
         </div>
         
-        <!-- 🔥 FIRMAS - CON MÁS ESPACIO Y MEJOR PRESENTACIÓN -->
+        <!-- FIRMAS -->
         <div style="margin-top:10px; padding-top:8px; border-top:2px solid #ddd;">
             <div style="font-weight:700; font-size:10px; color:#C1121F; text-align:center; margin-bottom:10px; letter-spacing:2px; text-transform:uppercase;">✍️ Firmas de Conformidad</div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:50px;">
-                <!-- FIRMA CLIENTE -->
                 <div style="text-align:center; padding:0 5px;">
                     <div style="font-weight:600; color:#333; margin-bottom:8px; font-size:8.5px; text-transform:uppercase; letter-spacing:1px;">Firma del Cliente</div>
                     <div style="border-bottom:2px solid #333; height:60px; margin-bottom:5px;"></div>
                     <div style="font-size:9px; color:#555; font-weight:600; margin-top:4px;">${detalle.cliente_nombre || '____________________'}</div>
                     <div style="font-size:7px; color:#999; margin-top:2px;">${fechaActual}</div>
                 </div>
-                <!-- FIRMA JEFE OPERATIVO -->
                 <div style="text-align:center; padding:0 5px;">
                     <div style="font-weight:600; color:#333; margin-bottom:8px; font-size:8.5px; text-transform:uppercase; letter-spacing:1px;">Firma del Jefe Operativo</div>
                     <div style="border-bottom:2px solid #333; height:60px; margin-bottom:5px;"></div>
@@ -4763,7 +4912,6 @@ function generarHTMLReporte(detalle) {
         </div>
     </div>`;
 }
-
 async function convertirImagenABase64(url) {
     try {
         const response = await fetchWithToken(`${API_URL}/jefe-operativo/imagen-base64`, {

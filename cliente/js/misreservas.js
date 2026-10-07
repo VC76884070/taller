@@ -105,6 +105,9 @@ function mostrarFechaActual() {
 }
 
 function setupEventListeners() {
+    // ============================================
+    // TABS DE NAVEGACIÓN
+    // ============================================
     const tabBtns = document.querySelectorAll('.tab-btn');
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -113,22 +116,146 @@ function setupEventListeners() {
         });
     });
     
+    // ============================================
+    // FILTROS Y REFRESH
+    // ============================================
     const filtroEstado = document.getElementById('filtroEstadoSolicitud');
     if (filtroEstado) filtroEstado.addEventListener('change', () => cargarMisSolicitudes());
     
     const btnRefresh = document.getElementById('btnRefreshSolicitudes');
     if (btnRefresh) btnRefresh.addEventListener('click', () => cargarMisSolicitudes());
     
+    // ============================================
+    // FORMULARIO DE NUEVA SOLICITUD
+    // ============================================
     const form = document.getElementById('formNuevaSolicitud');
     if (form) form.addEventListener('submit', enviarSolicitud);
     
+    // ============================================
+    // MODAL HORARIOS
+    // ============================================
     const btnRechazar = document.getElementById('btnRechazarHorarios');
     if (btnRechazar) btnRechazar.addEventListener('click', () => rechazarHorarios());
     
+    // ============================================
+    // MODAL CANCELAR
+    // ============================================
     const btnConfirmarCancelacion = document.getElementById('btnConfirmarCancelacion');
     if (btnConfirmarCancelacion) btnConfirmarCancelacion.addEventListener('click', () => confirmarCancelacion());
+    
+    // ============================================
+    // VALIDACIÓN EN TIEMPO REAL - DESCRIPCIÓN
+    // ============================================
+    const descripcion = document.getElementById('descripcionProblema');
+    if (descripcion) {
+        descripcion.addEventListener('input', () => {
+            const length = descripcion.value.trim().length;
+            
+            if (length === 0) {
+                descripcion.style.borderColor = '';
+                descripcion.style.boxShadow = '';
+            } else if (length < 10) {
+                descripcion.style.borderColor = '#f59e0b';
+                descripcion.style.boxShadow = '0 0 0 2px rgba(245, 158, 11, 0.2)';
+            } else {
+                descripcion.style.borderColor = '#10b981';
+                descripcion.style.boxShadow = '0 0 0 2px rgba(16, 185, 129, 0.2)';
+            }
+        });
+        
+        descripcion.addEventListener('blur', () => {
+            if (descripcion.value.trim().length >= 10) {
+                descripcion.style.borderColor = '';
+                descripcion.style.boxShadow = '';
+            }
+        });
+    }
+    
+    // ============================================
+    // VALIDACIÓN EN TIEMPO REAL - FECHA
+    // ============================================
+    const fechaInput = document.getElementById('fechaDeseada');
+    if (fechaInput) {
+        // Fecha mínima = mañana
+        const manana = new Date();
+        manana.setDate(manana.getDate() + 1);
+        fechaInput.min = manana.toISOString().split('T')[0];
+        
+        fechaInput.addEventListener('change', () => {
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+            const fecha = new Date(fechaInput.value + 'T00:00:00');
+            
+            if (fecha <= hoy) {
+                fechaInput.style.borderColor = '#ef4444';
+                fechaInput.style.boxShadow = '0 0 0 2px rgba(239, 68, 68, 0.2)';
+                mostrarNotificacion('⏰ Selecciona una fecha futura', 'warning');
+            } else {
+                fechaInput.style.borderColor = '#10b981';
+                fechaInput.style.boxShadow = '0 0 0 2px rgba(16, 185, 129, 0.2)';
+                setTimeout(() => {
+                    fechaInput.style.borderColor = '';
+                    fechaInput.style.boxShadow = '';
+                }, 1500);
+            }
+        });
+    }
+    
+    // ============================================
+    // VALIDACIÓN EN TIEMPO REAL - VEHÍCULO
+    // ============================================
+    const vehiculoSelect = document.getElementById('vehiculoSelect');
+    if (vehiculoSelect) {
+        vehiculoSelect.addEventListener('change', () => {
+            if (vehiculoSelect.value) {
+                vehiculoSelect.style.borderColor = '#10b981';
+                vehiculoSelect.style.boxShadow = '0 0 0 2px rgba(16, 185, 129, 0.2)';
+                setTimeout(() => {
+                    vehiculoSelect.style.borderColor = '';
+                    vehiculoSelect.style.boxShadow = '';
+                }, 1500);
+            }
+        });
+    }
+    
+    // ============================================
+    // CERRAR MODALES CON TECLA ESC
+    // ============================================
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            // Cerrar modal horarios
+            const modalHorarios = document.getElementById('modalHorarios');
+            if (modalHorarios?.classList.contains('show')) {
+                cerrarModalHorarios();
+            }
+            
+            // Cerrar modal cancelar
+            const modalCancelar = document.getElementById('modalCancelar');
+            if (modalCancelar?.classList.contains('show')) {
+                cerrarModalCancelar();
+            }
+            
+            // Cerrar modal detalle
+            const modalDetalle = document.getElementById('modalDetalleSolicitud');
+            if (modalDetalle?.classList.contains('show')) {
+                cerrarModalDetalle();
+            }
+        }
+    });
+    
+    // ============================================
+    // CERRAR MODALES AL HACER CLIC FUERA
+    // ============================================
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                if (modal.id === 'modalHorarios') cerrarModalHorarios();
+                if (modal.id === 'modalCancelar') cerrarModalCancelar();
+                if (modal.id === 'modalDetalleSolicitud') cerrarModalDetalle();
+            }
+        });
+    });
 }
-
 function cambiarTab(tabId) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelector(`.tab-btn[data-tab="${tabId}"]`).classList.add('active');
@@ -612,32 +739,121 @@ async function confirmarCancelacion() {
 
 async function enviarSolicitud(e) {
     e.preventDefault();
+    
     const vehiculoId = document.getElementById('vehiculoSelect')?.value;
     const fechaDeseada = document.getElementById('fechaDeseada')?.value;
     const horaDeseada = document.getElementById('horaDeseada')?.value;
-    const descripcionProblema = document.getElementById('descripcionProblema')?.value;
-    const mensajeAdicional = document.getElementById('mensajeAdicional')?.value;
+    const descripcionProblema = document.getElementById('descripcionProblema')?.value?.trim();
+    const mensajeAdicional = document.getElementById('mensajeAdicional')?.value?.trim();
     
-    if (!vehiculoId) { mostrarNotificacion('Selecciona un vehículo', 'warning'); return; }
-    if (!fechaDeseada) { mostrarNotificacion('Selecciona una fecha', 'warning'); return; }
-    if (!descripcionProblema || descripcionProblema.trim().length < 10) { mostrarNotificacion('Describe el problema (mínimo 10 caracteres)', 'warning'); return; }
+    // ============================================
+    // VALIDACIONES CON MENSAJES CLAROS
+    // ============================================
     
-    const fechaMinima = new Date(); fechaMinima.setHours(0, 0, 0, 0);
-    if (new Date(fechaDeseada) < fechaMinima) { mostrarNotificacion('No puedes seleccionar una fecha pasada', 'warning'); return; }
+    if (!vehiculoId) {
+        mostrarNotificacion('🚗 Por favor selecciona un vehículo', 'warning');
+        document.getElementById('vehiculoSelect')?.focus();
+        return;
+    }
+    
+    if (!fechaDeseada) {
+        mostrarNotificacion('📅 Por favor selecciona una fecha', 'warning');
+        document.getElementById('fechaDeseada')?.focus();
+        return;
+    }
+    
+    // Validar fecha no pasada
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaSeleccionada = new Date(fechaDeseada + 'T00:00:00');
+    
+    if (fechaSeleccionada < hoy) {
+        mostrarNotificacion('⏰ No puedes seleccionar una fecha pasada', 'error');
+        document.getElementById('fechaDeseada')?.focus();
+        return;
+    }
+    
+    // Validar fecha no sea hoy
+    const manana = new Date(hoy);
+    manana.setDate(manana.getDate() + 1);
+    if (fechaSeleccionada < manana) {
+        mostrarNotificacion('📅 La reserva debe ser para mañana o más adelante', 'warning');
+        return;
+    }
+    
+    // Validar descripción
+    if (!descripcionProblema) {
+        mostrarNotificacion('📝 Por favor describe el problema de tu vehículo', 'warning');
+        document.getElementById('descripcionProblema')?.focus();
+        return;
+    }
+    
+    if (descripcionProblema.length < 10) {
+        const faltan = 10 - descripcionProblema.length;
+        mostrarNotificacion(`📝 La descripción debe tener al menos 10 caracteres (faltan ${faltan})`, 'warning');
+        document.getElementById('descripcionProblema')?.focus();
+        return;
+    }
+    
+    if (descripcionProblema.length > 500) {
+        mostrarNotificacion('📝 La descripción es muy larga (máximo 500 caracteres)', 'warning');
+        return;
+    }
+    
+    // ============================================
+    // ENVIAR AL BACKEND
+    // ============================================
     
     mostrarLoading(true);
+    mostrarNotificacion('📤 Enviando solicitud...', 'info');
+    
     try {
-        const response = await fetch(`${API_URL}/api/cliente/solicitar`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ id_vehiculo: parseInt(vehiculoId), fecha_deseada: fechaDeseada, hora_deseada: horaDeseada || null, descripcion_problema: descripcionProblema, mensaje_adicional: mensajeAdicional || null }) });
+        const response = await fetch(`${API_URL}/api/cliente/solicitar`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({
+                id_vehiculo: parseInt(vehiculoId),
+                fecha_deseada: fechaDeseada,
+                hora_deseada: horaDeseada || null,
+                descripcion_problema: descripcionProblema,
+                mensaje_adicional: mensajeAdicional || null
+            })
+        });
+        
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Error al enviar solicitud');
-        alert('✅ Solicitud enviada. El taller te responderá pronto.');
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error al enviar la solicitud');
+        }
+        
+        // ✅ Éxito
+        mostrarNotificacion('✅ ¡Solicitud enviada! El taller te responderá pronto', 'success');
+        
         limpiarFormulario();
         cambiarTab('solicitudes');
         cargarMisSolicitudes();
-    } catch (error) { mostrarNotificacion(error.message, 'error'); }
-    finally { mostrarLoading(false); }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        
+        // Errores específicos
+        let mensaje = error.message;
+        if (mensaje.includes('token') || mensaje.includes('autorizado')) {
+            mensaje = '🔐 Tu sesión expiró. Inicia sesión nuevamente';
+        } else if (mensaje.includes('vehículo')) {
+            mensaje = '🚗 El vehículo seleccionado no es válido';
+        } else if (mensaje.includes('404')) {
+            mensaje = '🔌 No se pudo conectar con el servidor';
+        } else if (mensaje.includes('500')) {
+            mensaje = '⚠️ Error del servidor. Intenta de nuevo';
+        }
+        
+        mostrarNotificacion(mensaje, 'error');
+        
+    } finally {
+        mostrarLoading(false);
+    }
 }
-
 function limpiarFormulario() {
     document.getElementById('vehiculoSelect').value = '';
     document.getElementById('fechaDeseada').value = '';
@@ -674,11 +890,35 @@ function cerrarModalDetalle() { document.getElementById('modalDetalleSolicitud')
 function escapeHtml(text) { if (!text) return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
 
 function mostrarNotificacion(mensaje, tipo = 'info') {
+    // Eliminar toasts anteriores
+    document.querySelectorAll('.toast-notification').forEach(t => t.remove());
+    
     const toast = document.createElement('div');
     toast.className = `toast-notification ${tipo}`;
-    toast.innerHTML = `<span>${escapeHtml(mensaje)}</span>`;
+    
+    // Íconos según tipo
+    const iconos = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
+    };
+    
+    toast.innerHTML = `
+        <i class="fas ${iconos[tipo] || iconos.info}"></i>
+        <span>${escapeHtml(mensaje)}</span>
+    `;
+    
     document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+    
+    // Animación de entrada
+    setTimeout(() => toast.classList.add('show'), 10);
+    
+    // Auto-eliminar
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3500);
 }
 
 // Exponer funciones globales

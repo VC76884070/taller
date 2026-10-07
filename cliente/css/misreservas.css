@@ -1,6 +1,6 @@
 /* =====================================================
    MIS RESERVAS - CLIENTE
-   CORRECCIÓN DEFINITIVA: SIDEBAR CON TEXTO COMPLETO
+   CSS COMPLETO CON ESTILOS DE NOTIFICACIONES TOAST
    ===================================================== */
 
 /* =====================================================
@@ -51,13 +51,13 @@ body {
 }
 
 /* =====================================================
-   SIDEBAR - BASE (ANCHO FIJO 280px)
+   SIDEBAR - BASE
    ===================================================== */
 .sidebar {
     position: fixed;
     left: 0;
     top: 0;
-    width: 280px !important; /* FORZAR ancho fijo */
+    width: 280px !important;
     height: 100vh;
     background: linear-gradient(180deg, var(--negro) 0%, var(--negro-suave) 100%);
     border-right: 1px solid var(--border-color);
@@ -69,7 +69,6 @@ body {
     transform: translateX(0);
 }
 
-/* Ocultar scrollbar */
 .sidebar::-webkit-scrollbar {
     width: 4px;
 }
@@ -81,7 +80,6 @@ body {
     border-radius: var(--radius-full);
 }
 
-/* Header del sidebar */
 .sidebar-header {
     display: flex;
     align-items: center;
@@ -105,10 +103,9 @@ body {
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    display: inline-block !important; /* FORZAR visible */
+    display: inline-block !important;
 }
 
-/* Perfil de usuario */
 .sidebar-user {
     display: flex;
     align-items: center;
@@ -153,10 +150,9 @@ body {
     background: var(--gris-oscuro);
     padding: 0.2rem 0.5rem;
     border-radius: var(--radius-full);
-    display: inline-block !important; /* FORZAR visible */
+    display: inline-block !important;
 }
 
-/* Navegación */
 .sidebar-nav {
     flex: 1;
     display: flex;
@@ -196,7 +192,7 @@ body {
 
 .nav-link span {
     flex: 1;
-    display: inline-block !important; /* FORZAR visible */
+    display: inline-block !important;
     white-space: nowrap;
 }
 
@@ -232,7 +228,7 @@ body {
 }
 
 /* =====================================================
-   BOTÓN HAMBURGUESA - SOLO VISIBLE EN MÓVIL/TABLET
+   BOTÓN HAMBURGUESA
    ===================================================== */
 .hamburger-menu {
     position: fixed;
@@ -263,7 +259,6 @@ body {
     left: 275px;
 }
 
-/* Overlay para cerrar sidebar */
 .sidebar-overlay {
     position: fixed;
     top: 0;
@@ -295,27 +290,23 @@ body {
 }
 
 /* =====================================================
-   RESPONSIVE: TABLET Y MÓVIL (max 1024px)
+   RESPONSIVE: TABLET Y MÓVIL
    ===================================================== */
 @media (max-width: 1024px) {
-    /* Mostrar botón hamburguesa */
     .hamburger-menu {
         display: flex !important;
     }
     
-    /* Sidebar oculto por defecto */
     .sidebar {
         transform: translateX(-100%);
         width: 280px !important;
     }
     
-    /* Sidebar abierto */
     .sidebar.open {
         transform: translateX(0);
         box-shadow: 5px 0 25px rgba(0, 0, 0, 0.5);
     }
     
-    /* FORZAR que cuando está abierto se vea TODO */
     .sidebar.open .sidebar-brand,
     .sidebar.open .user-role,
     .sidebar.open .nav-link span {
@@ -324,25 +315,17 @@ body {
         opacity: 1 !important;
     }
     
-    .sidebar.open .sidebar-header {
-        justify-content: flex-start !important;
-    }
-    
-    .sidebar.open .sidebar-user {
-        justify-content: flex-start !important;
-    }
-    
+    .sidebar.open .sidebar-header,
+    .sidebar.open .sidebar-user,
     .sidebar.open .nav-link {
         justify-content: flex-start !important;
     }
     
-    /* Main content sin margen lateral */
     .main-content {
         margin-left: 0 !important;
         padding-top: 70px;
     }
     
-    /* Top bar responsive */
     .top-bar {
         flex-direction: column;
         align-items: flex-start;
@@ -354,7 +337,6 @@ body {
         justify-content: space-between;
     }
     
-    /* Tabs responsive */
     .tabs-container {
         padding: 0.8rem 1rem 0;
         overflow-x: auto;
@@ -371,7 +353,6 @@ body {
         padding: 1rem;
     }
     
-    /* Área táctil */
     .btn-primary,
     .btn-secondary,
     .btn-danger,
@@ -380,17 +361,12 @@ body {
     }
 }
 
-/* =====================================================
-   DESKTOP (min 1025px) - SIDEBAR SIEMPRE VISIBLE
-   ===================================================== */
 @media (min-width: 1025px) {
-    /* Sidebar siempre visible */
     .sidebar {
         transform: translateX(0) !important;
         width: 280px !important;
     }
     
-    /* FORZAR que siempre se vea el texto completo */
     .sidebar-brand,
     .user-role,
     .nav-link span {
@@ -399,34 +375,25 @@ body {
         opacity: 1 !important;
     }
     
-    /* Main content con margen izquierdo */
     .main-content {
         margin-left: 280px !important;
     }
     
-    /* Ocultar botón hamburguesa y overlay */
     .hamburger-menu,
     .sidebar-overlay {
         display: none !important;
     }
     
-    .sidebar-header {
-        justify-content: flex-start !important;
-    }
-    
-    .sidebar-user {
-        justify-content: flex-start !important;
-    }
-    
+    .sidebar-header,
+    .sidebar-user,
     .nav-link {
         justify-content: flex-start !important;
     }
 }
 
 /* =====================================================
-   RESTO DE ESTILOS (TOP BAR, TABS, CALENDARIO, ETC)
+   TOP BAR
    ===================================================== */
-
 .top-bar {
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
@@ -475,7 +442,9 @@ body {
     color: var(--rojo-primario);
 }
 
-/* TABS */
+/* =====================================================
+   TABS
+   ===================================================== */
 .tabs-container {
     display: flex;
     gap: 0.5rem;
@@ -525,7 +494,9 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* CALENDARIO */
+/* =====================================================
+   CALENDARIO
+   ===================================================== */
 .calendario-wrapper {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
@@ -596,7 +567,9 @@ body {
     background-color: #10B981 !important;
 }
 
-/* SOLICITUDES */
+/* =====================================================
+   SOLICITUDES
+   ===================================================== */
 .solicitudes-header {
     margin-bottom: 1.5rem;
 }
@@ -727,6 +700,7 @@ body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    color: var(--blanco);
 }
 
 .horario-item:hover {
@@ -734,7 +708,9 @@ body {
     border-color: var(--rojo-primario);
 }
 
-/* FORMULARIO */
+/* =====================================================
+   FORMULARIO
+   ===================================================== */
 .form-container {
     max-width: 700px;
     margin: 0 auto;
@@ -829,7 +805,9 @@ body {
     flex-wrap: wrap;
 }
 
-/* BOTONES */
+/* =====================================================
+   BOTONES
+   ===================================================== */
 .btn-primary {
     background: linear-gradient(135deg, var(--rojo-primario), var(--rojo-oscuro));
     color: var(--blanco);
@@ -889,7 +867,32 @@ body {
     color: var(--blanco);
 }
 
-/* MODALES */
+.btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+    border-radius: var(--radius-sm);
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.btn-success {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--verde-exito);
+    border: 1px solid var(--verde-exito);
+}
+.btn-success:hover {
+    background: var(--verde-exito);
+    color: var(--blanco);
+}
+
+/* =====================================================
+   MODALES
+   ===================================================== */
 .modal {
     display: none;
     position: fixed;
@@ -971,7 +974,9 @@ body {
     gap: 0.75rem;
 }
 
-/* LOADING */
+/* =====================================================
+   LOADING
+   ===================================================== */
 .loading-overlay {
     display: none;
     position: fixed;
@@ -1023,7 +1028,122 @@ body {
     font-size: 0.85rem;
 }
 
-/* SCROLLBAR */
+/* =====================================================
+   NOTIFICACIONES TOAST - BURBUJITAS ✨
+   ===================================================== */
+.toast-notification {
+    position: fixed;
+    top: 100px;
+    right: 24px;
+    min-width: 280px;
+    max-width: 420px;
+    padding: 14px 20px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    color: #ffffff;
+    background: #1A1A1C;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 
+        0 10px 30px rgba(0, 0, 0, 0.4),
+        0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    opacity: 0;
+    transform: translateX(120%);
+    transition: all 0.35s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+    pointer-events: none;
+    backdrop-filter: blur(10px);
+}
+
+.toast-notification.show {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+.toast-notification i {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.toast-notification span {
+    flex: 1;
+    line-height: 1.4;
+    word-wrap: break-word;
+}
+
+/* Success */
+.toast-notification.success {
+    background: linear-gradient(135deg, #065f46 0%, #10b981 100%);
+    border-color: rgba(16, 185, 129, 0.4);
+    box-shadow: 
+        0 10px 30px rgba(16, 185, 129, 0.3),
+        0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.toast-notification.success i {
+    color: #d1fae5;
+}
+
+/* Error */
+.toast-notification.error {
+    background: linear-gradient(135deg, #7f1d1d 0%, #C1121F 100%);
+    border-color: rgba(193, 18, 31, 0.4);
+    box-shadow: 
+        0 10px 30px rgba(193, 18, 31, 0.3),
+        0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.toast-notification.error i {
+    color: #fecaca;
+}
+
+/* Warning */
+.toast-notification.warning {
+    background: linear-gradient(135deg, #78350f 0%, #f59e0b 100%);
+    border-color: rgba(245, 158, 11, 0.4);
+    box-shadow: 
+        0 10px 30px rgba(245, 158, 11, 0.3),
+        0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.toast-notification.warning i {
+    color: #fef3c7;
+}
+
+/* Info */
+.toast-notification.info {
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 
+        0 10px 30px rgba(59, 130, 246, 0.3),
+        0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.toast-notification.info i {
+    color: #dbeafe;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .toast-notification {
+        top: 80px;
+        right: 12px;
+        left: 12px;
+        min-width: auto;
+        max-width: none;
+        padding: 12px 16px;
+        font-size: 13px;
+    }
+    
+    .toast-notification i {
+        font-size: 18px;
+    }
+}
+
+/* =====================================================
+   SCROLLBAR
+   ===================================================== */
 ::-webkit-scrollbar {
     width: 5px;
     height: 5px;
@@ -1042,7 +1162,9 @@ body {
     background: var(--rojo-primario);
 }
 
-/* MÓVIL PEQUEÑO */
+/* =====================================================
+   MÓVIL PEQUEÑO
+   ===================================================== */
 @media (max-width: 480px) {
     .page-title h1 {
         font-size: 1rem;
@@ -1083,7 +1205,6 @@ body {
     }
 }
 
-/* LANDSCAPE */
 @media (max-width: 768px) and (orientation: landscape) {
     .main-content {
         padding-top: 60px;
@@ -1094,11 +1215,10 @@ body {
         overflow-y: auto;
     }
 }
-/* =====================================================
-   CIERRE DE SESIÓN - BOTÓN DESTACADO (CLIENTE)
-   ===================================================== */
 
-/* Botón de cerrar sesión - estilo destacado */
+/* =====================================================
+   CIERRE DE SESIÓN - BOTÓN DESTACADO
+   ===================================================== */
 .cerrar-sesion-item {
     margin-top: 0.75rem;
     border-top: 2px solid var(--rojo-primario, #C1121F);
@@ -1129,17 +1249,12 @@ body {
     color: var(--blanco, #FFFFFF);
 }
 
-/* Espaciador al final del sidebar para poder hacer scroll */
 .spacer-item {
     height: 80px !important;
     min-height: 80px !important;
     pointer-events: none !important;
     opacity: 0 !important;
 }
-
-/* =====================================================
-   RESPONSIVE - SCROLL SUAVE EN MÓVILES
-   ===================================================== */
 
 @media (max-width: 1024px) {
     .sidebar {

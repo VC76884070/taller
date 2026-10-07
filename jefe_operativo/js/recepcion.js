@@ -5173,11 +5173,18 @@ async function editarRecepcion(id) {
             tipo_tercero: detalle.tipo_tercero,
             nombre_tercero: detalle.nombre_tercero,
             telefono_tercero: detalle.telefono_tercero,
+            ubicacion_tercero: detalle.ubicacion_tercero,
             es_empresa: detalle.es_empresa,
             nombre_empresa: detalle.nombre_empresa,
             nit_empresa: detalle.nit_empresa,
+            ubicacion_empresa: detalle.ubicacion_empresa,
+            ubicacion_empresa_latitud: detalle.ubicacion_empresa_latitud,
+            ubicacion_empresa_longitud: detalle.ubicacion_empresa_longitud,
             nombre_propietario_real: detalle.nombre_propietario_real,
-            telefono_propietario_real: detalle.telefono_propietario_real
+            telefono_propietario_real: detalle.telefono_propietario_real,
+            ubicacion_propietario_real: detalle.ubicacion_propietario_real,
+            ubicacion_propietario_latitud: detalle.ubicacion_propietario_latitud,
+            ubicacion_propietario_longitud: detalle.ubicacion_propietario_longitud
         });
         
         seccionesCompletadasLocal.cliente = !!(detalle.cliente_nombre && detalle.cliente_telefono && detalle.cliente_ubicacion);
@@ -6244,10 +6251,10 @@ function cargarDatosPropietario(datosCliente) {
             document.getElementById('ubicacionTercero').value = datosCliente.ubicacion_tercero || datosCliente.ubicacion || '';
         }
         if (document.getElementById('ubicacionTerceroLatitud')) {
-            document.getElementById('ubicacionTerceroLatitud').value = datosCliente.latitud || '';
+            document.getElementById('ubicacionTerceroLatitud').value = datosCliente.ubicacion_tercero_latitud || datosCliente.latitud || '';
         }
         if (document.getElementById('ubicacionTerceroLongitud')) {
-            document.getElementById('ubicacionTerceroLongitud').value = datosCliente.longitud || '';
+            document.getElementById('ubicacionTerceroLongitud').value = datosCliente.ubicacion_tercero_longitud || datosCliente.longitud || '';
         }
         
         // Empresa
@@ -6300,10 +6307,6 @@ function cargarDatosPropietario(datosCliente) {
         radioPropietario.dispatchEvent(new Event('change'));
     }
 }
-// =====================================================
-// 🔥 OBTENER DATOS DE PROPIETARIO PARA ENVIAR AL BACKEND
-// =====================================================
-
 // =====================================================
 // 🔥 OBTENER DATOS DE PROPIETARIO PARA ENVIAR AL BACKEND
 // =====================================================

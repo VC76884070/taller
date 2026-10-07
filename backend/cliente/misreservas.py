@@ -226,14 +226,9 @@ def crear_solicitud():
         return jsonify({'error': str(e)}), 500
 
 
-# =====================================================
-# ENDPOINT - OBTENER SOLICITUDES
-# Busca por id_cliente = usuario_id
-# =====================================================
-
 @misreservas_bp.route('/solicitudes', methods=['GET'])
 def obtener_solicitudes():
-    """Obtener solicitudes del cliente"""
+    """Obtener solicitudes del cliente (TODAS, sin filtro)"""
     try:
         user, error_response, error_code = verificar_token()
         if error_response:
@@ -241,7 +236,7 @@ def obtener_solicitudes():
         
         usuario_id = user['id']
         
-        # 🔥 Buscar por id_cliente = usuario_id (así se guardan)
+        # 🔥 Traer TODAS las solicitudes (sin filtrar por estado)
         result = supabase.table('solicitud_reserva_cliente') \
             .select('*') \
             .eq('id_cliente', usuario_id) \
@@ -249,6 +244,8 @@ def obtener_solicitudes():
             .execute()
         
         solicitudes = result.data or []
+        
+        logger.info(f"📋 Cliente {usuario_id} tiene {len(solicitudes)} solicitudes")
         
         # Enriquecer con datos del vehículo
         for solicitud in solicitudes:
@@ -293,6 +290,8 @@ def obtener_reservas_confirmadas():
             .execute()
         
         reservas = result.data or []
+        
+        logger.info(f"📅 Cliente {usuario_id} tiene {len(reservas)} reservas confirmadas")
         
         for reserva in reservas:
             if reserva.get('id_vehiculo'):

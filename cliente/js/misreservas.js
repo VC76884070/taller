@@ -615,6 +615,30 @@ function renderizarSolicitudes(solicitudes) {
         const estadoTexto = getEstadoTexto(solicitud.estado);
         const estadoClase = getEstadoClase(solicitud.estado);
         
+        // 🔥 Fecha confirmada si existe
+        let fechaConfirmadaHtml = '';
+        if (solicitud.fecha_agendada) {
+            const fechaAgendada = new Date(solicitud.fecha_agendada);
+            fechaConfirmadaHtml = `
+                <div class="solicitud-vehiculo" style="color: #10B981; margin-top: 0.5rem;">
+                    <i class="fas fa-calendar-check"></i> 
+                    <strong>Confirmada para:</strong> 
+                    ${fechaAgendada.toLocaleDateString()} a las ${fechaAgendada.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                </div>
+            `;
+        }
+        
+        // 🔥 Motivo de cancelación si existe
+        let motivoCancelacionHtml = '';
+        if (solicitud.estado === 'cancelada' && solicitud.respuesta_comentario) {
+            motivoCancelacionHtml = `
+                <div class="solicitud-vehiculo" style="color: #ef4444; margin-top: 0.5rem;">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Motivo:</strong> ${escapeHtml(solicitud.respuesta_comentario)}
+                </div>
+            `;
+        }
+        
         return `
             <div class="solicitud-card ${solicitud.estado}">
                 <div class="solicitud-header">
@@ -625,6 +649,8 @@ function renderizarSolicitudes(solicitudes) {
                     <div class="solicitud-vehiculo"><i class="fas fa-car"></i><strong>${solicitud.vehiculo?.placa || 'Vehículo no especificado'}</strong></div>
                     <div class="solicitud-vehiculo"><i class="fas fa-calendar-day"></i> Fecha deseada: ${solicitud.fecha_deseada} ${solicitud.hora_deseada ? `a las ${solicitud.hora_deseada}` : ''}</div>
                     <div class="solicitud-problema"><i class="fas fa-stethoscope"></i> ${escapeHtml(solicitud.descripcion_problema)}</div>
+                    ${fechaConfirmadaHtml}
+                    ${motivoCancelacionHtml}
                     ${solicitud.horarios_propuestos ? renderizarHorariosPropuestos(solicitud) : ''}
                 </div>
                 <div class="solicitud-footer">${renderizarBotonesSegunEstado(solicitud)}</div>

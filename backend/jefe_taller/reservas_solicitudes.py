@@ -1,5 +1,6 @@
 # =====================================================
 # RESERVAS Y SOLICITUDES - JEFE TALLER
+# CORREGIDO: Sin url_prefix en Blueprint (se registra en app.py)
 # ========================================================
 
 from flask import Blueprint, request, jsonify
@@ -14,12 +15,13 @@ import hashlib
 logger = logging.getLogger(__name__)
 
 # =====================================================
-# CREAR BLUEPRINT
+# CREAR BLUEPRINT (SIN url_prefix - se define en app.py)
 # =====================================================
-reservas_solicitudes_bp = Blueprint('reservas_solicitudes', __name__, url_prefix='/api/jefe-taller')
+reservas_solicitudes_bp = Blueprint('reservas_solicitudes', __name__)
 
 # Configuración
 supabase = config.supabase
+
 
 # =====================================================
 # FUNCIONES AUXILIARES
@@ -37,6 +39,7 @@ def verificar_rol_usuario(usuario_id, rol_nombre):
         logger.error(f"Error verificando rol: {e}")
         return False
 
+
 def obtener_nombre_usuario(usuario_id):
     """Obtener nombre de usuario por ID"""
     try:
@@ -53,11 +56,13 @@ def obtener_nombre_usuario(usuario_id):
         logger.error(f"Error obteniendo nombre de usuario: {e}")
         return None
 
+
 def generar_contrasena_temporal(email):
     """Generar una contraseña temporal para el cliente"""
     email_prefix = email.split('@')[0]
     random_suffix = ''.join(secrets.choice(string.digits) for _ in range(4))
     return f"{email_prefix}{random_suffix}"
+
 
 def validar_disponibilidad_horario(fecha_agendada, excluir_id=None):
     """
@@ -134,7 +139,7 @@ def obtener_notificaciones(current_user):
 
 
 # =====================================================
-# SOLICITUDES CLIENTES - JEFE TALLER
+# ENDPOINTS - SOLICITUDES DE CLIENTES
 # Adaptado: id_cliente en BD = usuario_id
 # =====================================================
 
@@ -157,10 +162,9 @@ def obtener_solicitudes_clientes(current_user):
         
         logger.info(f"📋 Encontradas {len(solicitudes)} solicitudes")
         
-        # 🔥 Enriquecer con datos del cliente (id_cliente = usuario.id)
+        # Enriquecer con datos del cliente (id_cliente = usuario.id)
         for solicitud in solicitudes:
             if solicitud.get('id_cliente'):
-                # id_cliente ES un usuario.id → buscar directamente
                 usuario = supabase.table('usuario') \
                     .select('nombre, contacto, email') \
                     .eq('id', solicitud['id_cliente']) \
@@ -336,22 +340,27 @@ def obtener_clientes(current_user):
 def obtener_vehiculos_cliente(current_user, cliente_id):
     """Obtener vehículos de un cliente específico"""
     try:
+        # cliente_id = usuario_id → buscar el cliente real
         cliente_data = supabase.table('cliente') \
             .select('id') \
-            .eq('id_usuario', cliente_id) \  # ← cliente_id = usuario_id
+            .eq('id_usuario', cliente_id) \
             .execute()
         
         if not cliente_data.data:
             return jsonify({'success': True, 'vehiculos': []}), 200
         
-        id_cliente = cliente_data.data[0]['id']  # ← cliente.id REAL
+        id_cliente = cliente_data.data[0]['id']
         
         vehiculos = supabase.table('vehiculo') \
             .select('id, placa, marca, modelo, anio') \
-            .eq('id_cliente', id_cliente) \  # ← Bien, usa cliente.id
+            .eq('id_cliente', id_cliente) \
             .execute()
         
         return jsonify({'success': True, 'vehiculos': vehiculos.data or []}), 200
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo vehículos del cliente: {str(e)}")
+        return jsonify({'error': str(e), 'vehiculos': []}), 500
 
 
 # =====================================================
@@ -502,6 +511,12 @@ def registrar_nuevo_cliente(current_user):
     except Exception as e:
         logger.error(f"Error registrando nuevo cliente: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINTS - RESERVAS
+# =====================================================
+
 @reservas_solicitudes_bp.route('/reservas', methods=['GET'])
 @jefe_taller_required
 def obtener_reservas(current_user):
@@ -613,6 +628,7 @@ def crear_reserva_manual(current_user):
         fecha_deseada = fecha_parts[0]
         hora_deseada = fecha_parts[1][:5] if len(fecha_parts) > 1 else '10:00'
         
+        # Guardar id_cliente = usuario_id (respeta la FK actual)
         nueva_reserva = {
             'id_cliente': cliente_id,
             'id_vehiculo': vehiculo_id,

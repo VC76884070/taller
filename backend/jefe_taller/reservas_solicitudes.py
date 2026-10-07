@@ -134,7 +134,8 @@ def obtener_notificaciones(current_user):
 
 
 # =====================================================
-# ENDPOINTS - SOLICITUDES DE CLIENTES
+# SOLICITUDES CLIENTES - JEFE TALLER
+# Adaptado: id_cliente en BD = usuario_id
 # =====================================================
 
 @reservas_solicitudes_bp.route('/solicitudes-clientes', methods=['GET'])
@@ -154,13 +155,21 @@ def obtener_solicitudes_clientes(current_user):
         result = query.execute()
         solicitudes = result.data or []
         
+        logger.info(f"📋 Encontradas {len(solicitudes)} solicitudes")
+        
+        # 🔥 Enriquecer con datos del cliente (id_cliente = usuario.id)
         for solicitud in solicitudes:
             if solicitud.get('id_cliente'):
-                usuario = obtener_nombre_usuario(solicitud['id_cliente'])
-                if usuario:
-                    solicitud['cliente_nombre'] = usuario.get('nombre')
-                    solicitud['cliente_contacto'] = usuario.get('contacto')
-                    solicitud['cliente_email'] = usuario.get('email')
+                # id_cliente ES un usuario.id → buscar directamente
+                usuario = supabase.table('usuario') \
+                    .select('nombre, contacto, email') \
+                    .eq('id', solicitud['id_cliente']) \
+                    .execute()
+                
+                if usuario.data:
+                    solicitud['cliente_nombre'] = usuario.data[0].get('nombre')
+                    solicitud['cliente_contacto'] = usuario.data[0].get('contacto')
+                    solicitud['cliente_email'] = usuario.data[0].get('email')
             
             if solicitud.get('id_vehiculo'):
                 vehiculo = supabase.table('vehiculo') \
@@ -176,14 +185,16 @@ def obtener_solicitudes_clientes(current_user):
         return jsonify({'success': True, 'solicitudes': solicitudes}), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo solicitudes: {str(e)}")
+        logger.error(f"❌ Error obteniendo solicitudes: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e), 'solicitudes': []}), 500
 
 
 @reservas_solicitudes_bp.route('/solicitudes-clientes/<int:id_solicitud>', methods=['GET'])
 @jefe_taller_required
 def obtener_solicitud_cliente(current_user, id_solicitud):
-    """Obtener detalle de una solicitud específica"""
+    """Detalle de una solicitud"""
     try:
         result = supabase.table('solicitud_reserva_cliente') \
             .select('*') \
@@ -195,11 +206,16 @@ def obtener_solicitud_cliente(current_user, id_solicitud):
         
         solicitud = result.data[0]
         
+        # id_cliente = usuario.id → buscar directamente
         if solicitud.get('id_cliente'):
-            usuario = obtener_nombre_usuario(solicitud['id_cliente'])
-            if usuario:
-                solicitud['cliente_nombre'] = usuario.get('nombre')
-                solicitud['cliente_contacto'] = usuario.get('contacto')
+            usuario = supabase.table('usuario') \
+                .select('nombre, contacto, email') \
+                .eq('id', solicitud['id_cliente']) \
+                .execute()
+            
+            if usuario.data:
+                solicitud['cliente_nombre'] = usuario.data[0].get('nombre')
+                solicitud['cliente_contacto'] = usuario.data[0].get('contacto')
         
         if solicitud.get('id_vehiculo'):
             vehiculo = supabase.table('vehiculo') \
@@ -214,7 +230,7 @@ def obtener_solicitud_cliente(current_user, id_solicitud):
         return jsonify({'success': True, 'solicitud': solicitud}), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo solicitud: {str(e)}")
+        logger.error(f"❌ Error obteniendo solicitud: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -322,24 +338,20 @@ def obtener_vehiculos_cliente(current_user, cliente_id):
     try:
         cliente_data = supabase.table('cliente') \
             .select('id') \
-            .eq('id_usuario', cliente_id) \
+            .eq('id_usuario', cliente_id) \  # ← cliente_id = usuario_id
             .execute()
         
         if not cliente_data.data:
             return jsonify({'success': True, 'vehiculos': []}), 200
         
-        id_cliente = cliente_data.data[0]['id']
+        id_cliente = cliente_data.data[0]['id']  # ← cliente.id REAL
         
         vehiculos = supabase.table('vehiculo') \
             .select('id, placa, marca, modelo, anio') \
-            .eq('id_cliente', id_cliente) \
+            .eq('id_cliente', id_cliente) \  # ← Bien, usa cliente.id
             .execute()
         
         return jsonify({'success': True, 'vehiculos': vehiculos.data or []}), 200
-        
-    except Exception as e:
-        logger.error(f"Error obteniendo vehículos del cliente: {str(e)}")
-        return jsonify({'error': str(e), 'vehiculos': []}), 500
 
 
 # =====================================================
@@ -490,16 +502,10 @@ def registrar_nuevo_cliente(current_user):
     except Exception as e:
         logger.error(f"Error registrando nuevo cliente: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
-
-# =====================================================
-# ENDPOINTS - RESERVAS
-# =====================================================
-
 @reservas_solicitudes_bp.route('/reservas', methods=['GET'])
 @jefe_taller_required
 def obtener_reservas(current_user):
-    """Obtener todas las reservas confirmadas para el calendario"""
+    """Reservas para el calendario"""
     try:
         estado = request.args.get('estado')
         
@@ -515,11 +521,16 @@ def obtener_reservas(current_user):
         reservas = result.data or []
         
         for reserva in reservas:
+            # id_cliente = usuario.id → buscar directamente
             if reserva.get('id_cliente'):
-                usuario = obtener_nombre_usuario(reserva['id_cliente'])
-                if usuario:
-                    reserva['cliente_nombre'] = usuario.get('nombre')
-                    reserva['cliente_contacto'] = usuario.get('contacto')
+                usuario = supabase.table('usuario') \
+                    .select('nombre, contacto') \
+                    .eq('id', reserva['id_cliente']) \
+                    .execute()
+                
+                if usuario.data:
+                    reserva['cliente_nombre'] = usuario.data[0].get('nombre')
+                    reserva['cliente_contacto'] = usuario.data[0].get('contacto')
             
             if reserva.get('id_vehiculo'):
                 vehiculo = supabase.table('vehiculo') \
@@ -534,7 +545,7 @@ def obtener_reservas(current_user):
         return jsonify({'success': True, 'reservas': reservas}), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo reservas: {str(e)}")
+        logger.error(f"❌ Error obteniendo reservas: {str(e)}")
         return jsonify({'error': str(e), 'reservas': []}), 500
 
 

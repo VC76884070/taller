@@ -1,11 +1,13 @@
 # =====================================================
-# MIS RESERVAS - CLIENTE (SIN DECORADOR COMPLEJO)
+# MIS RESERVAS - CLIENTE
+# VERSIÓN ADAPTADA: id_cliente en BD = usuario_id
 # =====================================================
 
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify
 from config import config
 import datetime
 import logging
+import jwt
 
 logger = logging.getLogger(__name__)
 
@@ -15,44 +17,43 @@ supabase = config.supabase
 
 
 # =====================================================
-# FUNCIÓN PARA VERIFICAR AUTENTICACIÓN MANUALMENTE
+# VERIFICAR TOKEN JWT
 # =====================================================
 
 def verificar_token():
-    """Verificar token manualmente sin decorador complejo"""
+    """Verificar token JWT y retornar datos del usuario"""
     try:
-        # Obtener token del header
         auth_header = request.headers.get('Authorization')
         if not auth_header:
             return None, jsonify({'error': 'No autorizado'}), 401
         
-        token = auth_header.replace('Bearer ', '')
+        token = auth_header.replace('Bearer ', '').strip()
+        if not token:
+            return None, jsonify({'error': 'Token vacío'}), 401
         
-        # Aquí deberías decodificar el JWT y obtener el usuario
-        # Por ahora, usamos session como fallback
-        if 'user_id' in session:
-            usuario_id = session['user_id']
-            
-            # Obtener usuario
-            user = supabase.table('usuario') \
-                .select('id, nombre, email') \
-                .eq('id', usuario_id) \
-                .execute()
-            
-            if user.data:
-                return user.data[0], None, None
-        else:
-            # Intentar obtener de localStorage vía header personalizado
-            user_id = request.headers.get('X-User-Id')
-            if user_id:
-                user = supabase.table('usuario') \
-                    .select('id, nombre, email') \
-                    .eq('id', int(user_id)) \
-                    .execute()
-                if user.data:
-                    return user.data[0], None, None
+        try:
+            payload = jwt.decode(token, config.SECRET_KEY, algorithms=['HS256'])
+        except jwt.ExpiredSignatureError:
+            return None, jsonify({'error': 'Token expirado'}), 401
+        except jwt.InvalidTokenError as e:
+            logger.warning(f"Token inválido: {e}")
+            return None, jsonify({'error': 'Token inválido'}), 401
         
-        return None, jsonify({'error': 'Sesión inválida'}), 401
+        user_data = payload.get('user', payload)
+        usuario_id = user_data.get('id')
+        
+        if not usuario_id:
+            return None, jsonify({'error': 'Token inválido: sin ID'}), 401
+        
+        user = supabase.table('usuario') \
+            .select('id, nombre, email, contacto') \
+            .eq('id', usuario_id) \
+            .execute()
+        
+        if not user.data:
+            return None, jsonify({'error': 'Usuario no encontrado'}), 401
+        
+        return user.data[0], None, None
         
     except Exception as e:
         logger.error(f"Error verificando token: {e}")
@@ -60,69 +61,75 @@ def verificar_token():
 
 
 # =====================================================
-# FUNCIONES AUXILIARES
+# HELPER: OBTENER CLIENTE REAL DESDE USUARIO_ID
 # =====================================================
 
-def obtener_id_cliente(usuario_id):
-    """Obtener el id de la tabla cliente"""
+def obtener_id_cliente_real(usuario_id):
+    """
+    Dado un usuario_id, retorna el id real de la tabla cliente.
+    Retorna None si no existe.
+    """
     try:
         result = supabase.table('cliente') \
             .select('id') \
             .eq('id_usuario', usuario_id) \
             .execute()
-        return result.data[0]['id'] if result.data else None
+        
+        if result.data:
+            return result.data[0]['id']
+        return None
     except Exception as e:
-        logger.error(f"Error obteniendo id_cliente: {e}")
+        logger.error(f"Error obteniendo cliente real: {e}")
         return None
 
 
-def obtener_vehiculos_cliente(usuario_id):
-    """Obtener los vehículos del cliente"""
-    try:
-        id_cliente = obtener_id_cliente(usuario_id)
-        if not id_cliente:
-            return []
-        
-        vehiculos = supabase.table('vehiculo') \
-            .select('id, placa, marca, modelo, anio') \
-            .eq('id_cliente', id_cliente) \
-            .execute()
-        
-        return vehiculos.data or []
-        
-    except Exception as e:
-        logger.error(f"Error obteniendo vehículos: {e}")
-        return []
+def obtener_o_crear_cliente_real(usuario_id):
+    """Obtiene el cliente real, o lo crea si no existe"""
+    id_cliente = obtener_id_cliente_real(usuario_id)
+    if id_cliente:
+        return id_cliente
+    
+    # Crear cliente
+    logger.info(f"⚠️ Creando cliente para usuario {usuario_id}")
+    nuevo = supabase.table('cliente').insert({
+        'id_usuario': usuario_id,
+        'es_propietario': True
+    }).execute()
+    
+    if not nuevo.data:
+        return None
+    return nuevo.data[0]['id']
 
 
 # =====================================================
-# ENDPOINT - OBTENER MIS DATOS (PRUEBA)
+# ENDPOINT - MI PERFIL
 # =====================================================
-
-@misreservas_bp.route('/test', methods=['GET'])
-def test():
-    """Endpoint de prueba sin autenticación"""
-    return jsonify({'success': True, 'message': 'API funcionando'}), 200
-
 
 @misreservas_bp.route('/mi-perfil', methods=['GET'])
 def obtener_mi_perfil():
-    """Obtener datos del cliente (sin decorador por ahora)"""
+    """Obtener datos del cliente y sus vehículos"""
     try:
-        # Verificar autenticación manualmente
         user, error_response, error_code = verificar_token()
         if error_response:
             return error_response, error_code
         
         usuario_id = user['id']
         
-        # Obtener info del cliente
         cliente_info = supabase.table('usuario') \
             .select('id, nombre, contacto, email, ubicacion') \
             .eq('id', usuario_id) \
             .execute()
         
-        vehiculos = obtener_vehiculos_cliente(usuario_id)
+        # 🔥 Obtener vehículos usando el id_cliente REAL (no usuario_id)
+        id_cliente_real = obtener_o_crear_cliente_real(usuario_id)
+        vehiculos = []
+        
+        if id_cliente_real:
+            vehiculos_result = supabase.table('vehiculo') \
+                .select('id, placa, marca, modelo, anio') \
+                .eq('id_cliente', id_cliente_real) \
+                .execute()
+            vehiculos = vehiculos_result.data or []
         
         return jsonify({
             'success': True,
@@ -137,19 +144,21 @@ def obtener_mi_perfil():
 
 # =====================================================
 # ENDPOINT - CREAR SOLICITUD
+# GUARDA id_cliente = usuario_id (por la FK actual)
 # =====================================================
 
 @misreservas_bp.route('/solicitar', methods=['POST'])
 def crear_solicitud():
-    """Crear nueva solicitud"""
+    """Crear nueva solicitud de reserva"""
     try:
-        # Verificar autenticación
         user, error_response, error_code = verificar_token()
         if error_response:
             return error_response, error_code
         
         usuario_id = user['id']
         data = request.get_json()
+        
+        logger.info(f"📝 Nueva solicitud de usuario {usuario_id}: {data}")
         
         id_vehiculo = data.get('id_vehiculo')
         fecha_deseada = data.get('fecha_deseada')
@@ -164,41 +173,67 @@ def crear_solicitud():
         if not descripcion_problema:
             return jsonify({'error': 'Descripción requerida'}), 400
         
-        # Crear solicitud
+        # 🔥 Verificar que el vehículo pertenece al cliente REAL
+        id_cliente_real = obtener_o_crear_cliente_real(usuario_id)
+        if not id_cliente_real:
+            return jsonify({'error': 'Error obteniendo cliente'}), 500
+        
+        vehiculo = supabase.table('vehiculo') \
+            .select('id, placa, id_cliente') \
+            .eq('id', id_vehiculo) \
+            .execute()
+        
+        if not vehiculo.data:
+            return jsonify({'error': 'Vehículo no encontrado'}), 404
+        
+        if vehiculo.data[0]['id_cliente'] != id_cliente_real:
+            return jsonify({'error': 'No autorizado para usar este vehículo'}), 403
+        
+        # 🔥 GUARDAR id_cliente = usuario_id (para respetar la FK actual)
         nueva_solicitud = {
-            'id_cliente': usuario_id,
+            'id_cliente': usuario_id,           # ← FK apunta a usuario.id
             'id_vehiculo': id_vehiculo,
             'fecha_solicitud': datetime.datetime.now().isoformat(),
             'fecha_deseada': fecha_deseada,
-            'hora_deseada': hora_deseada,
+            'hora_deseada': hora_deseada or None,
             'descripcion_problema': descripcion_problema,
-            'mensaje_adicional': mensaje_adicional,
+            'mensaje_adicional': mensaje_adicional or None,
             'estado': 'pendiente',
             'es_manual': False
         }
+        
+        logger.info(f"💾 Insertando: id_cliente={usuario_id}, id_vehiculo={id_vehiculo}")
         
         result = supabase.table('solicitud_reserva_cliente') \
             .insert(nueva_solicitud) \
             .execute()
         
+        if not result.data:
+            return jsonify({'error': 'Error guardando solicitud'}), 500
+        
+        logger.info(f"✅ Solicitud creada: {result.data[0].get('id')}")
+        
         return jsonify({
             'success': True,
-            'solicitud': result.data[0] if result.data else None,
-            'message': 'Solicitud enviada'
+            'solicitud': result.data[0],
+            'message': 'Solicitud enviada correctamente'
         }), 201
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"❌ Error creando solicitud: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 
 # =====================================================
 # ENDPOINT - OBTENER SOLICITUDES
+# Busca por id_cliente = usuario_id
 # =====================================================
 
 @misreservas_bp.route('/solicitudes', methods=['GET'])
 def obtener_solicitudes():
-    """Obtener todas las solicitudes del cliente"""
+    """Obtener solicitudes del cliente"""
     try:
         user, error_response, error_code = verificar_token()
         if error_response:
@@ -206,6 +241,7 @@ def obtener_solicitudes():
         
         usuario_id = user['id']
         
+        # 🔥 Buscar por id_cliente = usuario_id (así se guardan)
         result = supabase.table('solicitud_reserva_cliente') \
             .select('*') \
             .eq('id_cliente', usuario_id) \
@@ -214,7 +250,7 @@ def obtener_solicitudes():
         
         solicitudes = result.data or []
         
-        # Agregar datos del vehículo
+        # Enriquecer con datos del vehículo
         for solicitud in solicitudes:
             if solicitud.get('id_vehiculo'):
                 vehiculo = supabase.table('vehiculo') \
@@ -230,17 +266,17 @@ def obtener_solicitudes():
         }), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"❌ Error obteniendo solicitudes: {str(e)}")
         return jsonify({'error': str(e), 'solicitudes': []}), 500
 
 
 # =====================================================
-# ENDPOINT - RESERVAS CONFIRMADAS (CALENDARIO)
+# ENDPOINT - RESERVAS CONFIRMADAS
 # =====================================================
 
 @misreservas_bp.route('/reservas-confirmadas', methods=['GET'])
 def obtener_reservas_confirmadas():
-    """Obtener reservas confirmadas para el calendario"""
+    """Reservas confirmadas para el calendario"""
     try:
         user, error_response, error_code = verificar_token()
         if error_response:
@@ -273,7 +309,7 @@ def obtener_reservas_confirmadas():
         }), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"❌ Error obteniendo reservas: {str(e)}")
         return jsonify({'error': str(e), 'reservas': []}), 500
 
 
@@ -296,7 +332,7 @@ def aceptar_horario(solicitud_id):
         if not horario_seleccionado:
             return jsonify({'error': 'Horario requerido'}), 400
         
-        result = supabase.table('solicitud_reserva_cliente') \
+        supabase.table('solicitud_reserva_cliente') \
             .update({
                 'estado': 'confirmada',
                 'horario_seleccionado': horario_seleccionado,
@@ -307,13 +343,10 @@ def aceptar_horario(solicitud_id):
             .eq('id_cliente', usuario_id) \
             .execute()
         
-        return jsonify({
-            'success': True,
-            'message': 'Reserva confirmada'
-        }), 200
+        return jsonify({'success': True, 'message': 'Reserva confirmada'}), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"❌ Error aceptando horario: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -330,10 +363,10 @@ def rechazar_horarios(solicitud_id):
             return error_response, error_code
         
         usuario_id = user['id']
-        data = request.get_json()
+        data = request.get_json() or {}
         motivo = data.get('motivo', 'Cliente no aceptó')
         
-        result = supabase.table('solicitud_reserva_cliente') \
+        supabase.table('solicitud_reserva_cliente') \
             .update({
                 'estado': 'cancelada',
                 'respuesta_comentario': motivo,
@@ -343,13 +376,10 @@ def rechazar_horarios(solicitud_id):
             .eq('id_cliente', usuario_id) \
             .execute()
         
-        return jsonify({
-            'success': True,
-            'message': 'Horarios rechazados'
-        }), 200
+        return jsonify({'success': True, 'message': 'Horarios rechazados'}), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"❌ Error rechazando horarios: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -366,10 +396,10 @@ def cancelar_reserva(reserva_id):
             return error_response, error_code
         
         usuario_id = user['id']
-        data = request.get_json()
+        data = request.get_json() or {}
         motivo = data.get('motivo', 'Cliente canceló')
         
-        result = supabase.table('solicitud_reserva_cliente') \
+        supabase.table('solicitud_reserva_cliente') \
             .update({
                 'estado': 'cancelada',
                 'respuesta_comentario': motivo
@@ -379,23 +409,20 @@ def cancelar_reserva(reserva_id):
             .eq('estado', 'confirmada') \
             .execute()
         
-        return jsonify({
-            'success': True,
-            'message': 'Reserva cancelada'
-        }), 200
+        return jsonify({'success': True, 'message': 'Reserva cancelada'}), 200
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"❌ Error cancelando reserva: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
 # =====================================================
-# ENDPOINT - VEHÍCULOS EN TALLER (ÓRDENES ACTIVAS)
+# ENDPOINT - VEHÍCULOS EN TALLER
 # =====================================================
 
 @misreservas_bp.route('/vehiculos-en-taller', methods=['GET'])
 def obtener_vehiculos_en_taller():
-    """Obtener las órdenes activas del cliente (vehículos en taller)"""
+    """Órdenes activas del cliente"""
     try:
         user, error_response, error_code = verificar_token()
         if error_response:
@@ -403,115 +430,64 @@ def obtener_vehiculos_en_taller():
         
         usuario_id = user['id']
         
-        # Obtener el ID del cliente desde la tabla cliente
-        cliente = supabase.table('cliente') \
-            .select('id') \
-            .eq('id_usuario', usuario_id) \
-            .execute()
+        # 🔥 Obtener id_cliente REAL
+        id_cliente_real = obtener_o_crear_cliente_real(usuario_id)
+        if not id_cliente_real:
+            return jsonify({'success': True, 'ordenes': []}), 200
         
-        if not cliente.data:
-            return jsonify({'ordenes': []}), 200
-        
-        id_cliente = cliente.data[0]['id']
-        
-        # Obtener vehículos del cliente
+        # Vehículos del cliente
         vehiculos = supabase.table('vehiculo') \
             .select('id, placa, marca, modelo') \
-            .eq('id_cliente', id_cliente) \
+            .eq('id_cliente', id_cliente_real) \
             .execute()
         
         ids_vehiculos = [v['id'] for v in vehiculos.data] if vehiculos.data else []
         
         if not ids_vehiculos:
-            return jsonify({'ordenes': []}), 200
+            return jsonify({'success': True, 'ordenes': []}), 200
         
-        # Obtener órdenes activas (que no hayan finalizado ni entregado)
+        # Órdenes activas
         ordenes = supabase.table('ordentrabajo') \
-            .select('''
-                id, 
-                codigo_unico, 
-                id_vehiculo, 
-                fecha_ingreso, 
-                estado_global,
-                fecha_estimada_finalizacion,
-                dias_estimados_reparacion
-            ''') \
+            .select('id, codigo_unico, id_vehiculo, fecha_ingreso, estado_global, fecha_estimada_finalizacion, dias_estimados_reparacion') \
             .in_('id_vehiculo', ids_vehiculos) \
             .not_.in_('estado_global', ['Finalizado', 'Entregado']) \
             .execute()
         
-        # Para cada orden, obtener la planificación si existe (fallback)
-        for orden in ordenes.data:
-            planificacion = supabase.table('planificacion') \
-                .select('fecha_hora_inicio_real, fecha_hora_fin_estimado, horas_estimadas') \
-                .eq('id_orden_trabajo', orden['id']) \
-                .execute()
-            
-            if planificacion.data:
-                orden['planificacion'] = planificacion.data[0]
-                
-                # Si no hay fecha_estimada_finalizacion pero hay planificación, usarla
-                if not orden.get('fecha_estimada_finalizacion') and planificacion.data[0].get('fecha_hora_fin_estimado'):
-                    orden['fecha_estimada_finalizacion'] = planificacion.data[0]['fecha_hora_fin_estimado']
-            
-            # Obtener datos del vehículo
+        for orden in (ordenes.data or []):
             vehiculo = next((v for v in vehiculos.data if v['id'] == orden['id_vehiculo']), None)
             if vehiculo:
                 orden['vehiculo'] = vehiculo
         
         return jsonify({
             'success': True,
-            'ordenes': ordenes.data
+            'ordenes': ordenes.data or []
         }), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo vehículos en taller: {str(e)}")
+        logger.error(f"❌ Error obteniendo vehículos en taller: {str(e)}")
         return jsonify({'error': str(e), 'ordenes': []}), 500
 
 
 # =====================================================
-# ENDPOINT - DETALLE DE ORDEN DE TRABAJO
+# ENDPOINT - DETALLE DE ORDEN
 # =====================================================
 
 @misreservas_bp.route('/orden-trabajo/<int:orden_id>', methods=['GET'])
 def obtener_detalle_orden(orden_id):
-    """Obtener detalle de una orden de trabajo del cliente"""
+    """Detalle de una orden de trabajo"""
     try:
         user, error_response, error_code = verificar_token()
         if error_response:
             return error_response, error_code
         
         usuario_id = user['id']
+        id_cliente_real = obtener_o_crear_cliente_real(usuario_id)
         
-        # Obtener el ID del cliente
-        cliente = supabase.table('cliente') \
-            .select('id') \
-            .eq('id_usuario', usuario_id) \
-            .execute()
-        
-        if not cliente.data:
+        if not id_cliente_real:
             return jsonify({'error': 'Cliente no encontrado'}), 404
         
-        id_cliente = cliente.data[0]['id']
-        
-        # Obtener la orden con datos del vehículo
         orden = supabase.table('ordentrabajo') \
-            .select('''
-                id,
-                codigo_unico,
-                estado_global,
-                fecha_ingreso,
-                fecha_salida,
-                fecha_estimada_finalizacion,
-                dias_estimados_reparacion,
-                vehiculo!inner (
-                    id,
-                    placa,
-                    marca,
-                    modelo,
-                    id_cliente
-                )
-            ''') \
+            .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_salida, fecha_estimada_finalizacion, dias_estimados_reparacion, vehiculo!inner(id, placa, marca, modelo, id_cliente)') \
             .eq('id', orden_id) \
             .execute()
         
@@ -520,47 +496,23 @@ def obtener_detalle_orden(orden_id):
         
         orden_data = orden.data[0]
         
-        # Verificar que el vehículo pertenece al cliente
-        if orden_data['vehiculo']['id_cliente'] != id_cliente:
+        if orden_data['vehiculo']['id_cliente'] != id_cliente_real:
             return jsonify({'error': 'No autorizado'}), 403
         
-        # Obtener planificación si existe
-        planificacion = supabase.table('planificacion') \
-            .select('*') \
-            .eq('id_orden_trabajo', orden_id) \
-            .execute()
-        
-        if planificacion.data:
-            orden_data['planificacion'] = planificacion.data[0]
-        
-        # Obtener diagnósticos (opcional, para mostrar más info)
-        diagnostico = supabase.table('diagnostico_tecnico') \
-            .select('informe, estado, fecha_envio') \
-            .eq('id_orden_trabajo', orden_id) \
-            .order('version', desc=True) \
-            .limit(1) \
-            .execute()
-        
-        if diagnostico.data:
-            orden_data['diagnostico'] = diagnostico.data[0]
-        
-        return jsonify({
-            'success': True,
-            'orden': orden_data
-        }), 200
+        return jsonify({'success': True, 'orden': orden_data}), 200
         
     except Exception as e:
-        logger.error(f"Error obteniendo detalle de orden: {str(e)}")
+        logger.error(f"❌ Error obteniendo orden: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
 # =====================================================
-# ENDPOINT - REGISTRAR NUEVO VEHÍCULO
+# ENDPOINT - REGISTRAR VEHÍCULO
 # =====================================================
 
 @misreservas_bp.route('/vehiculos', methods=['POST'])
 def registrar_vehiculo():
-    """Registrar un nuevo vehículo para el cliente"""
+    """Registrar un nuevo vehículo"""
     try:
         user, error_response, error_code = verificar_token()
         if error_response:
@@ -578,49 +530,44 @@ def registrar_vehiculo():
         if not placa or not marca or not modelo:
             return jsonify({'error': 'Placa, marca y modelo son requeridos'}), 400
         
-        # Verificar si el cliente existe en la tabla cliente
-        cliente = supabase.table('cliente') \
-            .select('id') \
-            .eq('id_usuario', usuario_id) \
-            .execute()
+        # 🔥 Obtener id_cliente REAL
+        id_cliente_real = obtener_o_crear_cliente_real(usuario_id)
+        if not id_cliente_real:
+            return jsonify({'error': 'Error con cliente'}), 500
         
-        if not cliente.data:
-            # Crear cliente si no existe
-            nuevo_cliente = supabase.table('cliente') \
-                .insert({'id_usuario': usuario_id}) \
-                .execute()
-            id_cliente = nuevo_cliente.data[0]['id']
-        else:
-            id_cliente = cliente.data[0]['id']
-        
-        # Verificar si la placa ya existe para este cliente
         existe = supabase.table('vehiculo') \
             .select('id') \
             .eq('placa', placa) \
-            .eq('id_cliente', id_cliente) \
+            .eq('id_cliente', id_cliente_real) \
             .execute()
         
         if existe.data:
-            return jsonify({'error': 'Ya tienes un vehículo registrado con esa placa'}), 400
+            return jsonify({'error': 'Ya tienes un vehículo con esa placa'}), 400
         
-        # Registrar vehículo
-        nuevo_vehiculo = supabase.table('vehiculo') \
-            .insert({
-                'id_cliente': id_cliente,
-                'placa': placa,
-                'marca': marca,
-                'modelo': modelo,
-                'anio': anio if anio else None,
-                'kilometraje': kilometraje if kilometraje else None
-            }) \
-            .execute()
+        nuevo = supabase.table('vehiculo').insert({
+            'id_cliente': id_cliente_real,
+            'placa': placa,
+            'marca': marca,
+            'modelo': modelo,
+            'anio': anio if anio else None,
+            'kilometraje': kilometraje if kilometraje else None
+        }).execute()
         
         return jsonify({
             'success': True,
-            'vehiculo': nuevo_vehiculo.data[0],
-            'message': 'Vehículo registrado correctamente'
+            'vehiculo': nuevo.data[0],
+            'message': 'Vehículo registrado'
         }), 201
         
     except Exception as e:
-        logger.error(f"Error registrando vehículo: {str(e)}")
+        logger.error(f"❌ Error registrando vehículo: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ENDPOINT - TEST
+# =====================================================
+
+@misreservas_bp.route('/test', methods=['GET'])
+def test():
+    return jsonify({'success': True, 'message': 'API funcionando'}), 200

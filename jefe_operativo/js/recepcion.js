@@ -3901,18 +3901,18 @@ function setupTranscripcionFormulario() {
     }
 }
 // =====================================================
-// DESCARGAR PDF - VERSIÓN NATIVA (SIN IMAGEN)
-// Las fotos mantienen su proporción, el texto es real
+// DESCARGAR PDF - VERSIÓN NATIVA CON MÚLTIPLES PÁGINAS
+// Fotos con proporción correcta, sin emojis, 2+ páginas
 // =====================================================
 
 async function descargarPDFFinal() {
     if (descargandoPDF) {
-        mostrarNotificacion('⏳ Ya se está generando el PDF...', 'warning');
+        mostrarNotificacion('Ya se esta generando el PDF...', 'warning');
         return;
     }
 
     if (!datosReporteFinal) {
-        mostrarNotificacion('⚠️ No hay datos para generar PDF', 'warning');
+        mostrarNotificacion('No hay datos para generar PDF', 'warning');
         return;
     }
 
@@ -3932,7 +3932,7 @@ async function descargarPDFFinal() {
 
     try {
         // ============================================================
-        // 1. ASEGURAR QUE jsPDF ESTÁ CARGADO
+        // 1. ASEGURAR QUE jsPDF ESTA CARGADO
         // ============================================================
         if (typeof window.jspdf === 'undefined' && typeof jspdf === 'undefined') {
             await new Promise((resolve, reject) => {
@@ -3954,15 +3954,12 @@ async function descargarPDFFinal() {
         const comentarios = detalle.comentarios || {};
 
         updateProgressMessage('Convirtiendo fotos...');
-        updateProgressBar(15);
+        updateProgressBar(10);
 
         // ============================================================
-        // 3. CONVERTIR FOTOS A BASE64
+        // 3. CONVERTIR TODAS LAS FOTOS A BASE64
         // ============================================================
-        const fotosBase64 = {};
-
-        // Fotos obligatorias
-        const camposObligatorios = [
+        const fotosObligatorias = [
             { campo: 'url_lateral_izquierda', label: 'Lateral Izquierdo' },
             { campo: 'url_lateral_derecha', label: 'Lateral Derecho' },
             { campo: 'url_foto_frontal', label: 'Frontal' },
@@ -3972,30 +3969,74 @@ async function descargarPDFFinal() {
             { campo: 'url_foto_tablero', label: 'Tablero' }
         ];
 
-        let contador = 0;
-        const totalFotos = camposObligatorios.length;
+        const fotosOpcionales = [];
+        for (let i = 1; i <= 10; i++) {
+            fotosOpcionales.push({
+                campo: `url_opcional${i}`,
+                label: `Adicional ${i}`,
+                comentarioKey: `opcional${i}`
+            });
+        }
 
-        for (const f of camposObligatorios) {
+        const fotosConvertidas = {
+            obligatorias: [],
+            opcionales: []
+        };
+
+        // Convertir obligatorias
+        let contador = 0;
+        const totalObligatorias = fotosObligatorias.length;
+
+        for (const f of fotosObligatorias) {
             const url = fotos[f.campo];
             if (url && url !== 'null' && url !== 'None' && url !== '' && url !== 'undefined') {
                 try {
                     const base64 = await convertirImagenABase64(url);
                     if (base64 && base64.startsWith('data:image')) {
-                        fotosBase64[f.campo] = { base64, label: f.label };
+                        fotosConvertidas.obligatorias.push({
+                            campo: f.campo,
+                            label: f.label,
+                            base64: base64
+                        });
                     }
                 } catch (e) {
                     console.warn(`Error con ${f.campo}:`, e);
                 }
             }
             contador++;
-            updateProgressBar(15 + (contador / totalFotos) * 30);
+            updateProgressBar(10 + (contador / (totalObligatorias + 10)) * 30);
         }
 
+        // Convertir opcionales
+        for (const f of fotosOpcionales) {
+            const url = fotos[f.campo];
+            if (url && url !== 'null' && url !== 'None' && url !== '' && url !== 'undefined') {
+                try {
+                    const base64 = await convertirImagenABase64(url);
+                    if (base64 && base64.startsWith('data:image')) {
+                        fotosConvertidas.opcionales.push({
+                            campo: f.campo,
+                            label: f.label,
+                            comentario: comentarios[f.comentarioKey] || '',
+                            base64: base64
+                        });
+                    }
+                } catch (e) {
+                    console.warn(`Error con ${f.campo}:`, e);
+                }
+            }
+            contador++;
+            updateProgressBar(10 + (contador / (totalObligatorias + 10)) * 30);
+        }
+
+        console.log(`Fotos obligatorias: ${fotosConvertidas.obligatorias.length}/7`);
+        console.log(`Fotos opcionales: ${fotosConvertidas.opcionales.length}`);
+
         // ============================================================
-        // 4. CREAR PDF NATIVO (NO IMAGEN)
+        // 4. CREAR PDF NATIVO
         // ============================================================
         updateProgressMessage('Construyendo PDF...');
-        updateProgressBar(50);
+        updateProgressBar(45);
 
         const pdf = new jsPDF({
             orientation: 'portrait',
@@ -4005,8 +4046,8 @@ async function descargarPDFFinal() {
         });
 
         // ---------- DIMENSIONES ----------
-        const PAGE_W = 215.9;  // Carta ancho en mm
-        const PAGE_H = 279.4;  // Carta alto en mm
+        const PAGE_W = 215.9;
+        const PAGE_H = 279.4;
         const MARGEN = 12;
         const ANCHO_UTIL = PAGE_W - MARGEN * 2;
         let y = MARGEN;
@@ -4019,56 +4060,176 @@ async function descargarPDFFinal() {
         const COLOR_GRIS_FONDO = [245, 245, 245];
         const COLOR_NEGRO = [0, 0, 0];
 
-        // ---------- HEADER ----------
-        pdf.setFillColor(...COLOR_ROJO);
-        pdf.rect(0, 0, PAGE_W, 2, 'F');
+        // ============================================================
+        // FUNCION AUXILIAR: VERIFICAR Y CREAR NUEVA PAGINA
+        // ============================================================
+        const verificarEspacio = (alturaNecesaria) => {
+            if (y + alturaNecesaria > PAGE_H - 15) {
+                pdf.addPage();
+                y = MARGEN;
+                return true; // Se creó nueva página
+            }
+            return false;
+        };
 
-        pdf.setTextColor(...COLOR_ROJO);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(18);
-        pdf.text('FURIA', MARGEN, y + 6);
-        pdf.setTextColor(...COLOR_GRIS_OSCURO);
-        pdf.text('MOTOR', MARGEN + 23, y + 6);
+        // ============================================================
+        // FUNCION AUXILIAR: DIBUJAR ENCABEZADO (en cada página)
+        // ============================================================
+        const dibujarEncabezado = (esPrimera = false) => {
+            pdf.setFillColor(...COLOR_ROJO);
+            pdf.rect(0, 0, PAGE_W, 2, 'F');
 
-        pdf.setFontSize(7);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(...COLOR_GRIS_TEXTO);
-        pdf.text('TALLER AUTOMOTRIZ ESPECIALIZADO', MARGEN, y + 10);
+            pdf.setTextColor(...COLOR_ROJO);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(18);
+            pdf.text('FURIA', MARGEN, MARGEN + 6);
+            pdf.setTextColor(...COLOR_GRIS_OSCURO);
+            pdf.text('MOTOR', MARGEN + 23, MARGEN + 6);
 
-        // Info empresa derecha
-        pdf.setTextColor(...COLOR_ROJO);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(8);
-        pdf.text('FURIA MOTOR COMPANY', PAGE_W - MARGEN, y + 4, { align: 'right' });
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(7);
-        pdf.setTextColor(...COLOR_GRIS_TEXTO);
-        pdf.text('Cochabamba, Bolivia', PAGE_W - MARGEN, y + 7.5, { align: 'right' });
-        pdf.text('Tel: +591 4 1234567', PAGE_W - MARGEN, y + 11, { align: 'right' });
+            pdf.setFontSize(7);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(...COLOR_GRIS_TEXTO);
+            pdf.text('TALLER AUTOMOTRIZ ESPECIALIZADO', MARGEN, MARGEN + 10);
 
-        y += 15;
+            // Info empresa derecha (actualizada)
+            pdf.setTextColor(...COLOR_ROJO);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(8);
+            pdf.text('FURIA MOTOR COMPANY', PAGE_W - MARGEN, MARGEN + 3, { align: 'right' });
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(7);
+            pdf.setTextColor(...COLOR_GRIS_TEXTO);
+            pdf.text('74080830 - 68176122', PAGE_W - MARGEN, MARGEN + 6.5, { align: 'right' });
+            pdf.text('Av. del Policia N 25 entre Calle 1 y Calle 3', PAGE_W - MARGEN, MARGEN + 10, { align: 'right' });
+            pdf.text('Alto Seguencoma, La Paz - Bolivia', PAGE_W - MARGEN, MARGEN + 13.5, { align: 'right' });
 
-        // Línea divisoria
-        pdf.setDrawColor(...COLOR_ROJO);
-        pdf.setLineWidth(0.5);
-        pdf.line(MARGEN, y, PAGE_W - MARGEN, y);
-        y += 6;
+            // Línea divisoria
+            pdf.setDrawColor(...COLOR_ROJO);
+            pdf.setLineWidth(0.5);
+            pdf.line(MARGEN, MARGEN + 16, PAGE_W - MARGEN, MARGEN + 16);
+        };
 
-        // ---------- TÍTULO ----------
+        // ============================================================
+        // FUNCION AUXILIAR: DIBUJAR CAJA CON TITULO Y DATOS
+        // ============================================================
+        const dibujarCaja = (x, ancho, alto, titulo, lineas) => {
+            pdf.setFillColor(...COLOR_GRIS_FONDO);
+            pdf.rect(x, y, ancho, alto, 'F');
+
+            pdf.setDrawColor(...COLOR_GRIS_CLARO);
+            pdf.setLineWidth(0.2);
+            pdf.rect(x, y, ancho, alto);
+
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(8.5);
+            pdf.setTextColor(...COLOR_ROJO);
+            pdf.text(titulo, x + 3, y + 5);
+
+            pdf.setDrawColor(...COLOR_GRIS_CLARO);
+            pdf.line(x + 3, y + 6.5, x + ancho - 3, y + 6.5);
+
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(8);
+            pdf.setTextColor(...COLOR_GRIS_OSCURO);
+
+            let lineY = y + 10.5;
+            for (const linea of lineas) {
+                if (linea) {
+                    pdf.text(linea, x + 3, lineY);
+                    lineY += 4.2;
+                }
+            }
+        };
+
+        // ============================================================
+        // FUNCION AUXILIAR: DIBUJAR UNA FOTO CON PROPORCION CORRECTA
+        // ============================================================
+        const dibujarFoto = async (x, yPos, anchoDisp, altoDisp, foto, mostrarLabel = true) => {
+            if (!foto || !foto.base64) return;
+
+            // Precargar la imagen para obtener dimensiones reales
+            const img = new Image();
+            await new Promise((resolve) => {
+                img.onload = resolve;
+                img.onerror = resolve;
+                img.src = foto.base64;
+            });
+
+            const imgAspect = img.height / img.width;
+
+            // Calcular tamaño respetando proporción
+            let w = anchoDisp;
+            let h = w * imgAspect;
+
+            // Si es muy alta, ajustar por alto
+            if (h > altoDisp) {
+                h = altoDisp;
+                w = h / imgAspect;
+            }
+
+            // Centrar en el espacio disponible
+            const xImg = x + (anchoDisp - w) / 2;
+            const yImg = yPos + (altoDisp - h) / 2;
+
+            // Fondo gris claro detrás de la foto (por si hay transparencias)
+            pdf.setFillColor(240, 240, 240);
+            pdf.rect(x, yPos, anchoDisp, altoDisp, 'F');
+
+            // Insertar la imagen SIN deformar
+            pdf.addImage(foto.base64, 'JPEG', xImg, yImg, w, h);
+
+            // Borde
+            pdf.setDrawColor(...COLOR_GRIS_CLARO);
+            pdf.setLineWidth(0.2);
+            pdf.rect(x, yPos, anchoDisp, altoDisp);
+
+            // Etiqueta
+            if (mostrarLabel) {
+                pdf.setFont('helvetica', 'bold');
+                pdf.setFontSize(6.5);
+                pdf.setTextColor(...COLOR_GRIS_OSCURO);
+                pdf.text(foto.label, x + anchoDisp / 2, yPos + altoDisp + 3, { align: 'center' });
+            }
+        };
+
+        // ============================================================
+        // FUNCION AUXILIAR: DIBUJAR PLACEHOLDER DE FOTO VACIA
+        // ============================================================
+        const dibujarPlaceholder = (x, yPos, anchoDisp, altoDisp) => {
+            pdf.setFillColor(250, 250, 250);
+            pdf.rect(x, yPos, anchoDisp, altoDisp, 'F');
+
+            pdf.setDrawColor(...COLOR_GRIS_CLARO);
+            pdf.setLineWidth(0.2);
+            pdf.setLineDashPattern([1, 1], 0);
+            pdf.rect(x, yPos, anchoDisp, altoDisp);
+            pdf.setLineDashPattern([], 0);
+
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(7);
+            pdf.setTextColor(180, 180, 180);
+            pdf.text('Sin foto', x + anchoDisp / 2, yPos + altoDisp / 2, { align: 'center' });
+        };
+
+        // ============================================================
+        // PAGINA 1: ENCABEZADO + TITULO + INFO GENERAL
+        // ============================================================
+        dibujarEncabezado(true);
+        y = MARGEN + 20;
+
+        // ---------- TITULO ----------
         pdf.setTextColor(...COLOR_ROJO);
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(11);
-        pdf.text('ORDEN DE TRABAJO - RECEPCIÓN', PAGE_W / 2, y, { align: 'center' });
+        pdf.text('ORDEN DE TRABAJO - RECEPCION', PAGE_W / 2, y, { align: 'center' });
         y += 5;
 
-        // Código
-        const codigoTexto = `# ${detalle.codigo_unico || 'OT-N/A'}`;
         pdf.setFontSize(10);
         pdf.setTextColor(...COLOR_GRIS_OSCURO);
-        pdf.text(codigoTexto, PAGE_W / 2, y, { align: 'center' });
+        pdf.text(`# ${detalle.codigo_unico || 'OT-N/A'}`, PAGE_W / 2, y, { align: 'center' });
         y += 7;
 
-        // ---------- INFO GENERAL (barra gris) ----------
+        // ---------- INFO GENERAL ----------
         pdf.setFillColor(...COLOR_GRIS_FONDO);
         pdf.rect(MARGEN, y, ANCHO_UTIL, 8, 'F');
 
@@ -4079,41 +4240,8 @@ async function descargarPDFFinal() {
             ? new Date(detalle.fecha_ingreso).toLocaleString('es-ES')
             : 'No registrada';
         pdf.text(`Fecha: ${fechaIngreso}`, MARGEN + 3, y + 5);
-        pdf.text(`Estado: ${detalle.estado_global || 'En Recepción'}`, PAGE_W - MARGEN - 3, y + 5, { align: 'right' });
+        pdf.text(`Estado: ${detalle.estado_global || 'En Recepcion'}`, PAGE_W - MARGEN - 3, y + 5, { align: 'right' });
         y += 12;
-
-        // ---------- FUNCIÓN AUXILIAR PARA DIBUJAR CAJA CON TÍTULO ----------
-        const dibujarCaja = (x, ancho, alto, titulo, lineas) => {
-            // Fondo
-            pdf.setFillColor(...COLOR_GRIS_FONDO);
-            pdf.rect(x, y, ancho, alto, 'F');
-
-            // Borde
-            pdf.setDrawColor(...COLOR_GRIS_CLARO);
-            pdf.setLineWidth(0.2);
-            pdf.rect(x, y, ancho, alto);
-
-            // Título
-            pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(8.5);
-            pdf.setTextColor(...COLOR_ROJO);
-            pdf.text(titulo, x + 3, y + 5);
-
-            // Línea bajo título
-            pdf.setDrawColor(...COLOR_GRIS_CLARO);
-            pdf.line(x + 3, y + 6.5, x + ancho - 3, y + 6.5);
-
-            // Líneas de datos
-            pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(8);
-            pdf.setTextColor(...COLOR_GRIS_OSCURO);
-
-            let lineY = y + 10.5;
-            for (const linea of lineas) {
-                pdf.text(linea, x + 3, lineY);
-                lineY += 4.2;
-            }
-        };
 
         // ---------- DETECTAR TIPO DE CLIENTE ----------
         const esPropietario = detalle.es_propietario !== false;
@@ -4121,270 +4249,259 @@ async function descargarPDFFinal() {
         const esEmpresa = detalle.es_empresa === true;
 
         const tipoTerceroLabels = {
-            'familiar': 'Familiar del dueño',
+            'familiar': 'Familiar del dueno',
             'representante_empresa': 'Representante de empresa',
             'conductor': 'Conductor autorizado',
-            'amigo': 'Amigo del dueño',
+            'amigo': 'Amigo del dueno',
             'otro': 'Otro'
         };
         const tipoTerceroLabel = tipoTerceroLabels[detalle.tipo_tercero] || detalle.tipo_tercero || 'No especificado';
 
-        // ---------- DATOS DEL CLIENTE ----------
+        // ---------- DATOS CLIENTE + VEHICULO ----------
         const anchoMitad = (ANCHO_UTIL - 4) / 2;
 
         if (esPropietario) {
-            // Caso 1: Es dueño
-            dibujarCaja(MARGEN, anchoMitad, 32, '👤 DATOS DEL CLIENTE (Dueño)', [
+            dibujarCaja(MARGEN, anchoMitad, 32, 'DATOS DEL CLIENTE (Dueno)', [
                 `Nombre: ${detalle.cliente_nombre || 'No registrado'}`,
-                `Teléfono: ${detalle.cliente_telefono || 'No registrado'}`,
-                `Ubicación: ${(detalle.cliente_ubicacion || 'No especificada').substring(0, 55)}`,
+                `Telefono: ${detalle.cliente_telefono || 'No registrado'}`,
+                `Ubicacion: ${(detalle.cliente_ubicacion || 'No especificada').substring(0, 55)}`,
                 detalle.cliente_ubicacion && detalle.cliente_ubicacion.length > 55
-                    ? (detalle.cliente_ubicacion.substring(55, 110) || '')
+                    ? detalle.cliente_ubicacion.substring(55, 110)
                     : ''
             ]);
         } else {
-            // Caso 2: Es tercero
-            dibujarCaja(MARGEN, anchoMitad, 32, '👥 DATOS DEL TERCERO', [
+            dibujarCaja(MARGEN, anchoMitad, 32, 'DATOS DEL TERCERO', [
                 `Nombre: ${detalle.nombre_tercero || detalle.cliente_nombre || 'No registrado'}`,
-                `Teléfono: ${detalle.telefono_tercero || detalle.cliente_telefono || 'No registrado'}`,
-                `Ubicación: ${(detalle.ubicacion_tercero || detalle.cliente_ubicacion || 'No especificada').substring(0, 55)}`,
+                `Telefono: ${detalle.telefono_tercero || detalle.cliente_telefono || 'No registrado'}`,
+                `Ubicacion: ${(detalle.ubicacion_tercero || detalle.cliente_ubicacion || 'No especificada').substring(0, 55)}`,
                 `Tipo: ${tipoTerceroLabel}`
             ]);
         }
 
-        // ---------- DATOS DEL VEHÍCULO (columna derecha) ----------
         const xDerecha = MARGEN + anchoMitad + 4;
-        dibujarCaja(xDerecha, anchoMitad, 32, '🚗 DATOS DEL VEHÍCULO', [
+        dibujarCaja(xDerecha, anchoMitad, 32, 'DATOS DEL VEHICULO', [
             `Placa: ${detalle.placa || 'No registrada'}`,
             `Marca: ${detalle.marca || 'No registrada'}`,
             `Modelo: ${detalle.modelo || 'No registrado'}`,
-            `Año: ${detalle.anio || 'N/E'}  |  Km: ${detalle.kilometraje ? Number(detalle.kilometraje).toLocaleString() : '0'}`
+            `Anio: ${detalle.anio || 'N/E'}  |  Km: ${detalle.kilometraje ? Number(detalle.kilometraje).toLocaleString() : '0'}`
         ]);
 
         y += 36;
 
-        // ---------- SI ES TERCERO, MOSTRAR EMPRESA O DUEÑO REAL ----------
+        // ---------- SI ES TERCERO, MOSTRAR EMPRESA O DUENO REAL ----------
         if (esTercero) {
             if (esEmpresa) {
-                // Empresa
-                dibujarCaja(MARGEN, ANCHO_UTIL, 25, '🏢 DATOS DE LA EMPRESA', [
+                dibujarCaja(MARGEN, ANCHO_UTIL, 25, 'DATOS DE LA EMPRESA', [
                     `Nombre: ${detalle.nombre_empresa || 'No especificada'}`,
                     `NIT: ${detalle.nit_empresa || 'No especificado'}`,
-                    `Ubicación: ${(detalle.ubicacion_empresa || 'No especificada').substring(0, 90)}`
+                    `Ubicacion: ${(detalle.ubicacion_empresa || 'No especificada').substring(0, 90)}`
                 ]);
                 y += 29;
             } else {
-                // Dueño real
-                dibujarCaja(MARGEN, ANCHO_UTIL, 25, '🔑 DATOS DEL DUEÑO REAL DEL VEHÍCULO', [
+                dibujarCaja(MARGEN, ANCHO_UTIL, 25, 'DATOS DEL DUENO REAL DEL VEHICULO', [
                     `Nombre: ${detalle.nombre_propietario_real || 'No registrado'}`,
-                    `Teléfono: ${detalle.telefono_propietario_real || 'No registrado'}`,
-                    `Ubicación: ${(detalle.ubicacion_propietario_real || 'No especificada').substring(0, 90)}`
+                    `Telefono: ${detalle.telefono_propietario_real || 'No registrado'}`,
+                    `Ubicacion: ${(detalle.ubicacion_propietario_real || 'No especificada').substring(0, 90)}`
                 ]);
                 y += 29;
             }
         }
 
         // ============================================================
-        // 5. FOTOS CON PROPORCIÓN CORRECTA
+        // SECCION FOTOS OBLIGATORIAS (con salto de página automático)
         // ============================================================
         updateProgressMessage('Insertando fotos...');
-        updateProgressBar(70);
+        updateProgressBar(65);
 
-        // Título de sección fotos
+        // Verificar espacio para el título + primera fila
+        verificarEspacio(60);
+
         pdf.setFillColor(...COLOR_GRIS_FONDO);
         pdf.rect(MARGEN, y, ANCHO_UTIL, 8, 'F');
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(9);
         pdf.setTextColor(...COLOR_ROJO);
+        pdf.text(
+            `REGISTRO FOTOGRAFICO (${fotosConvertidas.obligatorias.length}/7)`,
+            MARGEN + 3,
+            y + 5.5
+        );
+        y += 12;
 
-        const fotosValidas = Object.keys(fotosBase64).length;
-        pdf.text(`📸 REGISTRO FOTOGRÁFICO (${fotosValidas}/7)`, MARGEN + 3, y + 5.5);
-        y += 10;
-
-        // Layout: 4 fotos arriba, 3 abajo (centradas)
-        const fotosArray = Object.entries(fotosBase64).map(([campo, data]) => ({
-            campo,
-            ...data
-        }));
-
-        // Ancho de cada foto en mm
+        // Layout 4 + 3 (dos filas)
         const gapFotos = 3;
-        const anchoFoto = (ANCHO_UTIL - gapFotos * 3) / 4;  // 4 columnas
-        const altoFoto = anchoFoto * 0.75;  // ratio 4:3 aprox (para no deformar)
+        const anchoFoto = (ANCHO_UTIL - gapFotos * 3) / 4;
+        const altoFoto = anchoFoto * 0.85;
 
-        // Primera fila: 4 fotos
-        const primeraFila = fotosArray.slice(0, 4);
-        let xFoto = MARGEN;
+        // --- PRIMERA FILA: 4 fotos ---
+        const primeraFila = fotosConvertidas.obligatorias.slice(0, 4);
+
+        // Verificar espacio para la fila completa
+        verificarEspacio(altoFoto + 8);
 
         for (let i = 0; i < 4; i++) {
             const f = primeraFila[i];
             const xActual = MARGEN + i * (anchoFoto + gapFotos);
 
             if (f) {
-                try {
-                    // 🔥 addImage mantiene la proporción si le das width y height correctos
-                    // Calcular dimensiones reales de la imagen
-                    const img = new Image();
-                    await new Promise((resolve) => {
-                        img.onload = resolve;
-                        img.onerror = resolve;
-                        img.src = f.base64;
-                    });
-
-                    const imgAspect = img.height / img.width;
-                    let w = anchoFoto;
-                    let h = w * imgAspect;
-
-                    // Si es muy alto, ajustar
-                    if (h > altoFoto * 1.5) {
-                        h = altoFoto * 1.5;
-                        w = h / imgAspect;
-                    }
-
-                    // Dibujar caja de imagen con fondo gris claro
-                    pdf.setFillColor(240, 240, 240);
-                    pdf.rect(xActual, y, anchoFoto, altoFoto, 'F');
-
-                    // Centrar imagen en la caja
-                    const xImg = xActual + (anchoFoto - w) / 2;
-                    const yImg = y + (altoFoto - h) / 2;
-
-                    pdf.addImage(f.base64, 'JPEG', xImg, yImg, w, h);
-
-                    // Borde
-                    pdf.setDrawColor(...COLOR_GRIS_CLARO);
-                    pdf.setLineWidth(0.2);
-                    pdf.rect(xActual, y, anchoFoto, altoFoto);
-
-                    // Etiqueta
-                    pdf.setFont('helvetica', 'bold');
-                    pdf.setFontSize(6);
-                    pdf.setTextColor(...COLOR_GRIS_OSCURO);
-                    pdf.text(f.label, xActual + anchoFoto / 2, y + altoFoto + 3, { align: 'center' });
-
-                } catch (e) {
-                    console.warn(`Error insertando foto ${f.campo}:`, e);
-                }
+                await dibujarFoto(xActual, y, anchoFoto, altoFoto, f);
             } else {
-                // Placeholder vacío
-                pdf.setFillColor(250, 250, 250);
-                pdf.rect(xActual, y, anchoFoto, altoFoto, 'F');
-                pdf.setDrawColor(...COLOR_GRIS_CLARO);
-                pdf.setLineDashPattern([1, 1], 0);
-                pdf.rect(xActual, y, anchoFoto, altoFoto);
-                pdf.setLineDashPattern([], 0);
-
-                pdf.setFont('helvetica', 'normal');
-                pdf.setFontSize(7);
-                pdf.setTextColor(180, 180, 180);
-                pdf.text('Sin foto', xActual + anchoFoto / 2, y + altoFoto / 2, { align: 'center' });
+                dibujarPlaceholder(xActual, y, anchoFoto, altoFoto);
             }
         }
-
         y += altoFoto + 6;
 
-        // Segunda fila: 3 fotos centradas
-        const segundaFila = fotosArray.slice(4, 7);
+        // --- SEGUNDA FILA: 3 fotos centradas ---
+        const segundaFila = fotosConvertidas.obligatorias.slice(4, 7);
 
         if (segundaFila.length > 0) {
-            const anchoFotoFila2 = anchoFoto;
-            const anchoTotalFila2 = anchoFotoFila2 * 3 + gapFotos * 2;
+            verificarEspacio(altoFoto + 8);
+
+            const anchoTotalFila2 = anchoFoto * 3 + gapFotos * 2;
             const xInicioFila2 = (PAGE_W - anchoTotalFila2) / 2;
 
             for (let i = 0; i < 3; i++) {
                 const f = segundaFila[i];
-                const xActual = xInicioFila2 + i * (anchoFotoFila2 + gapFotos);
+                const xActual = xInicioFila2 + i * (anchoFoto + gapFotos);
 
                 if (f) {
-                    try {
-                        const img = new Image();
-                        await new Promise((resolve) => {
-                            img.onload = resolve;
-                            img.onerror = resolve;
-                            img.src = f.base64;
-                        });
-
-                        const imgAspect = img.height / img.width;
-                        let w = anchoFotoFila2;
-                        let h = w * imgAspect;
-
-                        if (h > altoFoto * 1.5) {
-                            h = altoFoto * 1.5;
-                            w = h / imgAspect;
-                        }
-
-                        pdf.setFillColor(240, 240, 240);
-                        pdf.rect(xActual, y, anchoFotoFila2, altoFoto, 'F');
-
-                        const xImg = xActual + (anchoFotoFila2 - w) / 2;
-                        const yImg = y + (altoFoto - h) / 2;
-
-                        pdf.addImage(f.base64, 'JPEG', xImg, yImg, w, h);
-
-                        pdf.setDrawColor(...COLOR_GRIS_CLARO);
-                        pdf.setLineWidth(0.2);
-                        pdf.rect(xActual, y, anchoFotoFila2, altoFoto);
-
-                        pdf.setFont('helvetica', 'bold');
-                        pdf.setFontSize(6);
-                        pdf.setTextColor(...COLOR_GRIS_OSCURO);
-                        pdf.text(f.label, xActual + anchoFotoFila2 / 2, y + altoFoto + 3, { align: 'center' });
-
-                    } catch (e) {
-                        console.warn(`Error insertando foto ${f.campo}:`, e);
-                    }
+                    await dibujarFoto(xActual, y, anchoFoto, altoFoto, f);
+                } else {
+                    dibujarPlaceholder(xActual, y, anchoFoto, altoFoto);
                 }
             }
-
             y += altoFoto + 8;
         }
 
         // ============================================================
-        // 6. DESCRIPCIÓN
+        // SECCION FOTOS OPCIONALES CON COMENTARIOS
         // ============================================================
-        const descripcionTexto = detalle.transcripcion_problema || 'No se registró descripción';
+        if (fotosConvertidas.opcionales.length > 0) {
+            // Nueva página para fotos opcionales (más limpio)
+            pdf.addPage();
+            dibujarEncabezado();
+            y = MARGEN + 20;
 
-        // Calcular altura de la caja según líneas de texto
+            pdf.setFillColor(...COLOR_GRIS_FONDO);
+            pdf.rect(MARGEN, y, ANCHO_UTIL, 8, 'F');
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(9);
+            pdf.setTextColor(...COLOR_ROJO);
+            pdf.text(
+                `FOTOS ADICIONALES DE DETALLE (${fotosConvertidas.opcionales.length})`,
+                MARGEN + 3,
+                y + 5.5
+            );
+            y += 12;
+
+            // 3 fotos por fila con comentario debajo
+            const anchoFotoOpc = (ANCHO_UTIL - gapFotos * 2) / 3;
+            const altoFotoOpc = anchoFotoOpc * 0.85;
+            const altoConComentario = altoFotoOpc + 12; // espacio para label + comentario
+
+            for (let i = 0; i < fotosConvertidas.opcionales.length; i += 3) {
+                const grupoFotos = fotosConvertidas.opcionales.slice(i, i + 3);
+
+                // Verificar espacio para la fila completa
+                verificarEspacio(altoConComentario + 5);
+
+                for (let j = 0; j < 3; j++) {
+                    const foto = grupoFotos[j];
+                    const xActual = MARGEN + j * (anchoFotoOpc + gapFotos);
+
+                    if (foto) {
+                        // Dibujar foto
+                        await dibujarFoto(xActual, y, anchoFotoOpc, altoFotoOpc, foto);
+
+                        // Dibujar comentario si existe
+                        if (foto.comentario) {
+                            pdf.setFont('helvetica', 'italic');
+                            pdf.setFontSize(7);
+                            pdf.setTextColor(...COLOR_GRIS_TEXTO);
+
+                            // Truncar comentario si es muy largo
+                            const comentarioCorto = foto.comentario.length > 80
+                                ? foto.comentario.substring(0, 77) + '...'
+                                : foto.comentario;
+
+                            const lineasComentario = pdf.splitTextToSize(
+                                comentarioCorto,
+                                anchoFotoOpc - 2
+                            );
+
+                            let comentarioY = y + altoFotoOpc + 7;
+                            for (let k = 0; k < Math.min(lineasComentario.length, 2); k++) {
+                                pdf.text(lineasComentario[k], xActual + anchoFotoOpc / 2, comentarioY, { align: 'center' });
+                                comentarioY += 3.5;
+                            }
+                        }
+                    } else {
+                        dibujarPlaceholder(xActual, y, anchoFotoOpc, altoFotoOpc);
+                    }
+                }
+
+                y += altoConComentario;
+            }
+
+            y += 5;
+        }
+
+        // ============================================================
+        // SECCION DESCRIPCION
+        // ============================================================
+        const descripcionTexto = detalle.transcripcion_problema || 'No se registro descripcion';
+
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(8);
         const maxAnchoTexto = ANCHO_UTIL - 6;
         const lineasDesc = pdf.splitTextToSize(descripcionTexto, maxAnchoTexto);
-        const altoDesc = Math.max(18, lineasDesc.length * 4 + 12);
+        const altoDesc = Math.max(20, lineasDesc.length * 4 + 14);
 
-        dibujarCaja(MARGEN, ANCHO_UTIL, altoDesc, '📝 DESCRIPCIÓN DEL PROBLEMA', []);
-        y += 8.5;
+        // Verificar espacio para descripción + firmas
+        verificarEspacio(altoDesc + 60);
 
-        // Texto de descripción
+        pdf.setFillColor(...COLOR_GRIS_FONDO);
+        pdf.rect(MARGEN, y, ANCHO_UTIL, 8, 'F');
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9);
+        pdf.setTextColor(...COLOR_ROJO);
+        pdf.text('DESCRIPCION DEL PROBLEMA', MARGEN + 3, y + 5.5);
+
+        pdf.setDrawColor(...COLOR_GRIS_CLARO);
+        pdf.line(MARGEN + 3, y + 7, MARGEN + ANCHO_UTIL - 3, y + 7);
+
+        // Caja de texto
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(MARGEN, y + 8, ANCHO_UTIL, altoDesc - 10, 'F');
+        pdf.setDrawColor(...COLOR_GRIS_CLARO);
+        pdf.rect(MARGEN, y + 8, ANCHO_UTIL, altoDesc - 10);
+
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(8);
         pdf.setTextColor(...COLOR_GRIS_OSCURO);
-        pdf.text(lineasDesc, MARGEN + 3, y + 2);
-        y += altoDesc - 6;
+        pdf.text(lineasDesc, MARGEN + 3, y + 13);
 
-        y += 4;
+        y += altoDesc + 4;
 
         // ============================================================
-        // 7. FIRMAS
+        // SECCION FIRMAS
         // ============================================================
-        // Verificar si hay espacio, sino nueva página
-        if (y > PAGE_H - 50) {
-            pdf.addPage();
-            y = MARGEN;
-        }
+        verificarEspacio(50);
 
         pdf.setDrawColor(...COLOR_GRIS_CLARO);
         pdf.setLineWidth(0.3);
         pdf.line(MARGEN, y, PAGE_W - MARGEN, y);
-        y += 4;
+        y += 6;
 
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(9);
         pdf.setTextColor(...COLOR_ROJO);
         pdf.text('FIRMAS DE CONFORMIDAD', PAGE_W / 2, y, { align: 'center' });
-        y += 10;
+        y += 12;
+
+        const firmaY = y + 20;
 
         // Firma cliente (izquierda)
-        const firmaY = y + 25;
         pdf.setDrawColor(...COLOR_NEGRO);
         pdf.setLineWidth(0.4);
         pdf.line(MARGEN + 10, firmaY, MARGEN + 80, firmaY);
@@ -4392,16 +4509,16 @@ async function descargarPDFFinal() {
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(7);
         pdf.setTextColor(...COLOR_GRIS_OSCURO);
-        pdf.text('FIRMA DEL CLIENTE', MARGEN + 45, y + 4, { align: 'center' });
+        pdf.text('FIRMA DEL CLIENTE', MARGEN + 45, firmaY + 4, { align: 'center' });
 
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(8);
-        pdf.text(detalle.cliente_nombre || '____________________', MARGEN + 45, firmaY + 5, { align: 'center' });
+        pdf.text(detalle.cliente_nombre || '____________________', MARGEN + 45, firmaY + 8, { align: 'center' });
 
         const fechaActual = new Date().toLocaleDateString('es-ES');
         pdf.setFontSize(7);
         pdf.setTextColor(...COLOR_GRIS_TEXTO);
-        pdf.text(fechaActual, MARGEN + 45, firmaY + 10, { align: 'center' });
+        pdf.text(fechaActual, MARGEN + 45, firmaY + 13, { align: 'center' });
 
         // Firma jefe (derecha)
         const xFirmaJefe = PAGE_W - MARGEN - 80;
@@ -4412,31 +4529,35 @@ async function descargarPDFFinal() {
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(7);
         pdf.setTextColor(...COLOR_GRIS_OSCURO);
-        pdf.text('FIRMA DEL JEFE OPERATIVO', xFirmaJefe + 35, y + 4, { align: 'center' });
+        pdf.text('FIRMA DEL JEFE OPERATIVO', xFirmaJefe + 35, firmaY + 4, { align: 'center' });
 
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(8);
-        pdf.text(detalle.jefe_operativo?.nombre || '____________________', xFirmaJefe + 35, firmaY + 5, { align: 'center' });
+        pdf.text(detalle.jefe_operativo?.nombre || '____________________', xFirmaJefe + 35, firmaY + 8, { align: 'center' });
 
         pdf.setFontSize(7);
         pdf.setTextColor(...COLOR_GRIS_TEXTO);
-        pdf.text(fechaActual, xFirmaJefe + 35, firmaY + 10, { align: 'center' });
+        pdf.text(fechaActual, xFirmaJefe + 35, firmaY + 13, { align: 'center' });
 
         // ============================================================
-        // 8. FOOTER
+        // FOOTER EN TODAS LAS PAGINAS
         // ============================================================
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(6.5);
-        pdf.setTextColor(180, 180, 180);
-        pdf.text(
-            `Documento generado por FURIA MOTOR - ${new Date().toLocaleString('es-ES')}`,
-            PAGE_W / 2,
-            PAGE_H - 6,
-            { align: 'center' }
-        );
+        const totalPaginas = pdf.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPaginas; i++) {
+            pdf.setPage(i);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(6.5);
+            pdf.setTextColor(180, 180, 180);
+            pdf.text(
+                `FURIA MOTOR | ${detalle.codigo_unico || 'N/A'} | Pagina ${i} de ${totalPaginas}`,
+                PAGE_W / 2,
+                PAGE_H - 5,
+                { align: 'center' }
+            );
+        }
 
         // ============================================================
-        // 9. GUARDAR Y DESCARGAR
+        // GUARDAR Y DESCARGAR
         // ============================================================
         updateProgressBar(90);
         updateProgressMessage('Descargando...');
@@ -4444,7 +4565,6 @@ async function descargarPDFFinal() {
         const nombreArchivo = `Recepcion_${detalle.codigo_unico || 'orden'}.pdf`;
         const pdfBlob = pdf.output('blob');
 
-        // Descargar localmente
         const link = document.createElement('a');
         link.href = URL.createObjectURL(pdfBlob);
         link.download = nombreArchivo;
@@ -4453,10 +4573,10 @@ async function descargarPDFFinal() {
         document.body.removeChild(link);
         URL.revokeObjectURL(link.href);
 
-        mostrarNotificacion('📥 PDF descargado', 'success');
+        mostrarNotificacion('PDF descargado correctamente', 'success');
 
         // ============================================================
-        // 10. SUBIR A GOOGLE DRIVE
+        // SUBIR A GOOGLE DRIVE
         // ============================================================
         updateProgressBar(95);
         updateProgressMessage('Subiendo a Drive...');
@@ -4485,20 +4605,20 @@ async function descargarPDFFinal() {
         }
 
         updateProgressBar(100);
-        updateProgressMessage('¡Listo!');
+        updateProgressMessage('Listo!');
 
-        mostrarNotificacion('✅ PDF guardado en Drive', 'success');
+        mostrarNotificacion('PDF guardado en Drive', 'success');
         setTimeout(() => completeProgress(true), 500);
 
     } catch (error) {
         console.error('Error generando PDF:', error);
         completeProgress(false);
-        mostrarNotificacion('❌ Error: ' + error.message, 'error');
+        mostrarNotificacion('Error: ' + error.message, 'error');
     }
 
     if (btnDescargar) {
         btnDescargar.disabled = false;
-        btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> 📥 Descargar PDF';
+        btnDescargar.innerHTML = '<i class="fas fa-file-pdf"></i> Descargar PDF';
     }
 
     descargandoPDF = false;

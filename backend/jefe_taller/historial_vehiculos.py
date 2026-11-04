@@ -558,3 +558,4 @@ def obtener_detalle_completo_orden(current_user, id_orden):
 @jefe_taller_required
 def test_endpoint(current_user):
     return jsonify({'success': True, 'message': 'Historial OK', 'user_id': current_user.get('id')}), 200
+    

@@ -398,42 +398,55 @@ window.verDetalleCompletoOrden = async function (idOrden) {
     const modal = document.getElementById('modalDetalleOrden');
     if (!modal) return;
 
+    // 🔥 VALIDACIÓN CRÍTICA: Si el ID no existe, evitamos que el fetch falle
+    if (!idOrden || idOrden === 'undefined') {
+        console.error("❌ ID de orden inválido:", idOrden);
+        mostrarNotificacion('Error: No se pudo obtener el ID de la orden', 'error');
+        return;
+    }
+
     try {
         modal.classList.add('show');
+        
+        // Resetear tabs
+        document.querySelectorAll('.modal-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+        document.querySelectorAll('.modal-tab-content').forEach((c, i) => c.classList.toggle('active', i === 0));
 
-        // Resetear a la primera tab
-        document.querySelectorAll('.modal-tab').forEach((t, i) => {
-            t.classList.toggle('active', i === 0);
-        });
-        document.querySelectorAll('.modal-tab-content').forEach((c, i) => {
-            c.classList.toggle('active', i === 0);
-        });
-
-        // Loading en cada tab
+        // Mostrar spinners
         ['clienteVehiculoContent', 'recepcionContent', 'diagnosticosContent', 'serviciosContent', 'timelineContent'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.innerHTML = `<div style="text-align:center;padding:30px"><i class="fas fa-spinner fa-spin" style="font-size:28px;color:#C1121F;"></i><p style="margin-top:10px;color:#8E8E93">Cargando...</p></div>`;
         });
 
         const token = localStorage.getItem('furia_token');
-        const response = await fetch(`${window.API_BASE_URL}/api/jefe-taller/detalle-completo-orden/${idOrden}`, {
+        
+        // 🔥 LA URL CORRECTA (Asegúrate que API_BASE_URL no esté vacío en producción)
+        const baseUrl = window.API_BASE_URL || '';
+        const url = `${baseUrl}/api/jefe-taller/detalle-completo-orden/${idOrden}`;
+        
+        console.log("📡 Consultando backend en:", url);
+        
+        const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        if (!response.ok) throw new Error('Error al cargar detalle');
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Error del servidor (${response.status})`);
+        }
+
         const data = await response.json();
 
         if (data.success && data.detalle) {
             ordenActualDetalle = data.detalle;
             cargarDetalleEnTabs(data.detalle);
         } else {
-            mostrarNotificacion(data.error || 'Error al cargar detalle', 'error');
-            cerrarModalDetalle();
+            throw new Error(data.error || 'Datos inválidos en la respuesta');
         }
 
     } catch (error) {
-        console.error('Error:', error);
-        mostrarNotificacion('Error de conexión al servidor', 'error');
+        console.error('❌ Error detalle:', error);
+        mostrarNotificacion('Error al cargar detalle: ' + error.message, 'error');
         cerrarModalDetalle();
     }
 };

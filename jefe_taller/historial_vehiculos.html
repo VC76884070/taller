@@ -8,158 +8,30 @@
 
     <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- Estilos -->
     <link rel="stylesheet" href="/jefe_taller/css/dashboard.css">
     <link rel="stylesheet" href="/jefe_taller/css/historial_vehiculos.css">
+
     <!-- ========== CONFIGURACIÓN PWA (ICONO TORQUE) ========== -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#C1121F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TORQUE">
-    
+
     <!-- ICONO PARA LA PESTAÑA DEL NAVEGADOR -->
     <link rel="icon" type="image/png" href="/icono.png">
     <link rel="shortcut icon" type="image/png" href="/icono.png">
-    
+
     <!-- ICONO PARA IPHONE / IPAD (pantalla de inicio) -->
     <link rel="apple-touch-icon" href="/icono.png">
-    
+
     <!-- ICONO PARA ANDROID (chrome) -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icono.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icono.png">
     <!-- ===================================================== -->
-
-    <style>
-        /* Estilos para tabs dentro del modal */
-        .modal-tabs {
-            display: flex;
-            gap: 0.5rem;
-            border-bottom: 1px solid var(--border-color);
-            margin-bottom: 1.5rem;
-            padding-bottom: 0.5rem;
-            flex-wrap: wrap;
-        }
-
-        .modal-tab {
-            padding: 0.5rem 1rem;
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-size: 0.85rem;
-            border-radius: var(--radius-sm);
-            transition: all 0.2s;
-        }
-
-        .modal-tab:hover {
-            background: var(--gris-oscuro);
-            color: var(--texto-primario);
-        }
-
-        .modal-tab.active {
-            background: var(--rojo-primario);
-            color: white;
-        }
-
-        .modal-tab-content {
-            display: none;
-        }
-
-        .modal-tab-content.active {
-            display: block;
-        }
-
-        .detalle-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .detalle-item {
-            background: var(--bg-card);
-            padding: 0.75rem;
-            border-radius: var(--radius-md);
-            border: 1px solid var(--border-color);
-        }
-
-        .detalle-label {
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            display: block;
-            margin-bottom: 0.25rem;
-        }
-
-        .detalle-value {
-            font-weight: 500;
-            font-size: 0.9rem;
-        }
-
-        .detalle-descripcion {
-            background: var(--gris-oscuro);
-            padding: 0.75rem;
-            border-radius: var(--radius-md);
-            margin: 0.5rem 0;
-        }
-
-        .fotos-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-            gap: 0.75rem;
-            margin-top: 0.75rem;
-        }
-
-        .foto-item {
-            cursor: pointer;
-            border-radius: var(--radius-sm);
-            overflow: hidden;
-            border: 1px solid var(--border-color);
-            transition: transform 0.2s;
-        }
-
-        .foto-item:hover {
-            transform: scale(1.02);
-        }
-
-        .foto-item img {
-            width: 100%;
-            height: 80px;
-            object-fit: cover;
-        }
-
-        .foto-label {
-            font-size: 0.65rem;
-            padding: 0.25rem;
-            text-align: center;
-            background: var(--bg-card);
-        }
-
-        .audio-player {
-            margin-top: 0.75rem;
-            padding: 0.75rem;
-            background: var(--gris-oscuro);
-            border-radius: var(--radius-md);
-        }
-
-        .audio-player audio {
-            width: 100%;
-            margin-top: 0.5rem;
-        }
-
-        .tecnico-badge {
-            display: inline-block;
-            background: var(--rojo-primario);
-            color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 20px;
-            font-size: 0.7rem;
-        }
-    </style>
 </head>
 
 <body>
@@ -191,13 +63,13 @@
             <div class="content">
                 <div class="historial-container">
 
-                    <!-- Panel de Búsqueda -->
+                    <!-- ============ PANEL DE BÚSQUEDA ============ -->
                     <div class="busqueda-panel">
                         <div class="busqueda-grid">
                             <div class="form-group">
                                 <label><i class="fas fa-search"></i> Buscar por placa</label>
-                                <input type="text" id="searchPlaca" class="form-input" placeholder="Ej: 123ABC, 456DEF"
-                                    autocomplete="off">
+                                <input type="text" id="searchPlaca" class="form-input"
+                                       placeholder="Ej: 123ABC, 456DEF" autocomplete="off">
                             </div>
                             <div class="form-group">
                                 <label><i class="fas fa-filter"></i> Filtrar por estado</label>
@@ -205,9 +77,11 @@
                                     <option value="">Todos</option>
                                     <option value="Entregado">Entregados</option>
                                     <option value="Finalizado">Finalizados</option>
-                                    <option value="EnProceso">En Proceso</option>
+                                    <option value="EnReparacion">En Reparación</option>
+                                    <option value="EnDiagnostico">En Diagnóstico</option>
                                     <option value="EnRecepcion">En Recepción</option>
                                     <option value="EnPausa">En Pausa</option>
+                                    <option value="ReparacionCompletada">Reparación Completada</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -227,7 +101,7 @@
                         </div>
                     </div>
 
-                    <!-- Resultados -->
+                    <!-- ============ RESULTADOS ============ -->
                     <div id="resultadosContainer">
                         <div class="loading-state">
                             <i class="fas fa-spinner fa-spin"></i>
@@ -240,7 +114,7 @@
         </main>
     </div>
 
-    <!-- Modal para ver detalle de orden (CON TABS) -->
+    <!-- ============ MODAL DETALLE COMPLETO (5 TABS) ============ -->
     <div class="modal" id="modalDetalleOrden">
         <div class="modal-content modal-xl">
             <div class="modal-header">
@@ -250,10 +124,21 @@
             <div class="modal-body">
                 <!-- Tabs dentro del modal -->
                 <div class="modal-tabs">
-                    <button class="modal-tab active" data-tab="cliente-vehiculo">👤 Cliente & Vehículo</button>
-                    <button class="modal-tab" data-tab="recepcion">📋 Recepción</button>
-                    <button class="modal-tab" data-tab="diagnosticos">🔬 Diagnósticos</button>
-                    <button class="modal-tab" data-tab="servicios">💰 Servicios</button>
+                    <button class="modal-tab active" data-tab="cliente-vehiculo">
+                        <i class="fas fa-user-circle"></i> Cliente & Vehículo
+                    </button>
+                    <button class="modal-tab" data-tab="recepcion">
+                        <i class="fas fa-clipboard-list"></i> Recepción
+                    </button>
+                    <button class="modal-tab" data-tab="diagnosticos">
+                        <i class="fas fa-microscope"></i> Diagnósticos
+                    </button>
+                    <button class="modal-tab" data-tab="servicios">
+                        <i class="fas fa-tools"></i> Servicios & Avances
+                    </button>
+                    <button class="modal-tab" data-tab="timeline">
+                        <i class="fas fa-stream"></i> Timeline
+                    </button>
                 </div>
 
                 <div id="tab-cliente-vehiculo" class="modal-tab-content active">
@@ -268,14 +153,20 @@
                 <div id="tab-servicios" class="modal-tab-content">
                     <div id="serviciosContent"></div>
                 </div>
+                <div id="tab-timeline" class="modal-tab-content">
+                    <div id="timelineContent"></div>
+                </div>
             </div>
             <div class="modal-footer">
+                <button class="btn-pdf" id="btnGenerarPDF">
+                    <i class="fas fa-file-pdf"></i> Descargar PDF
+                </button>
                 <button class="btn-secondary" onclick="cerrarModalDetalle()">Cerrar</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal para ver imágenes ampliadas -->
+    <!-- ============ MODAL IMAGEN AMPLIADA ============ -->
     <div class="modal" id="modalImagen">
         <div class="modal-content modal-sm">
             <div class="modal-header">
@@ -284,7 +175,7 @@
             </div>
             <div class="modal-body">
                 <img id="imagenAmpliada" src="" alt="Imagen ampliada"
-                    style="width: 100%; border-radius: var(--radius-md);">
+                     style="width: 100%; border-radius: var(--radius-md);">
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="cerrarModalImagen()">Cerrar</button>
@@ -294,96 +185,65 @@
 
     <script src="/jefe_taller/js/include.js"></script>
     <script src="/jefe_taller/js/historial_vehiculos.js"></script>
-    
-    <!-- ========== SCRIPT RESPONSIVE PARA SIDEBAR (JEFE TALLER - HISTORIAL) ========== -->
+
+    <!-- ========== SCRIPT RESPONSIVE PARA SIDEBAR ========== -->
     <script>
-        // =====================================================
-        // FUNCIONES RESPONSIVE PARA SIDEBAR (JEFE TALLER - HISTORIAL)
-        // =====================================================
-        
         let sidebarOpen = false;
-        
-        // Función para toggle sidebar en móvil/tablet
+
         function toggleSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
-            
             if (!sidebar) return;
-            
             sidebarOpen = !sidebarOpen;
-            
             if (sidebarOpen) {
                 sidebar.classList.add('open');
                 if (overlay) overlay.classList.add('active');
                 if (hamburger) hamburger.classList.add('active');
                 body.classList.add('sidebar-open');
-                
-                // Cambiar icono del hamburguesa
                 const icon = hamburger.querySelector('i');
                 if (icon) icon.className = 'fas fa-times';
             } else {
                 closeSidebar();
             }
         }
-        
-        // Función para cerrar sidebar
+
         function closeSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             const hamburger = document.getElementById('hamburgerMenu');
             const body = document.body;
-            
             if (sidebar) {
                 sidebar.classList.remove('open');
                 if (overlay) overlay.classList.remove('active');
                 if (hamburger) hamburger.classList.remove('active');
                 body.classList.remove('sidebar-open');
-                
                 const icon = hamburger.querySelector('i');
                 if (icon) icon.className = 'fas fa-bars';
             }
-            
             sidebarOpen = false;
         }
-        
-        // Event Listeners
-        document.addEventListener('DOMContentLoaded', function() {
-            // Botón hamburguesa
-            const hamburgerBtn = document.getElementById('hamburgerMenu');
-            if (hamburgerBtn) {
-                hamburgerBtn.addEventListener('click', toggleSidebar);
-            }
-            
-            // Overlay
-            const overlay = document.getElementById('sidebarOverlay');
-            if (overlay) {
-                overlay.addEventListener('click', closeSidebar);
-            }
-            
-            // Cerrar sidebar al redimensionar a desktop
-            window.addEventListener('resize', function() {
-                if (window.innerWidth > 1024 && sidebarOpen) {
-                    closeSidebar();
-                }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            document.getElementById('hamburgerMenu')?.addEventListener('click', toggleSidebar);
+            document.getElementById('sidebarOverlay')?.addEventListener('click', closeSidebar);
+
+            window.addEventListener('resize', function () {
+                if (window.innerWidth > 1024 && sidebarOpen) closeSidebar();
             });
-            
-            // Cerrar sidebar al hacer click en enlaces (móvil)
-            document.addEventListener('click', function(e) {
+
+            document.addEventListener('click', function (e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
                     const hamburger = document.getElementById('hamburgerMenu');
-                    
-                    // Si el click no fue en el sidebar ni en el botón hamburguesa
                     if (sidebar && !sidebar.contains(e.target) && hamburger && !hamburger.contains(e.target)) {
                         closeSidebar();
                     }
                 }
             });
-            
-            // Prevenir scroll del body cuando sidebar está abierto
-            document.addEventListener('touchmove', function(e) {
+
+            document.addEventListener('touchmove', function (e) {
                 if (window.innerWidth <= 1024 && sidebarOpen) {
                     const sidebar = document.querySelector('.sidebar');
                     if (sidebar && !sidebar.contains(e.target)) {
@@ -392,11 +252,10 @@
                 }
             });
         });
-        
-        // Exponer funciones globalmente
+
         window.toggleSidebar = toggleSidebar;
         window.closeSidebar = closeSidebar;
-        
+
         console.log('✅ historial_vehiculos.html (Jefe Taller) - Funciones responsive cargadas');
     </script>
     <script src="/register_sw.js"></script>

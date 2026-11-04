@@ -10,7 +10,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('agendacliente_id_seq'::regclass)",
                     "posicion": 1,
@@ -18,7 +18,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_cliente",
                     "default": null,
                     "posicion": 2,
@@ -26,7 +26,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_solicitud",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 3,
@@ -34,7 +34,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_agendada",
                     "default": null,
                     "posicion": 4,
@@ -50,12 +50,12 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": "'Pendiente'::character varying",
                     "posicion": 6,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 }
             ],
             "clave_primaria": [
@@ -84,11 +84,23 @@
                 {
                     "nombre": "idx_asignaciontecnico_orden",
                     "definicion": "CREATE INDEX idx_asignaciontecnico_orden ON public.asignaciontecnico USING btree (id_orden_trabajo, tipo_asignacion)"
+                },
+                {
+                    "nombre": "idx_asignaciontecnico_orden_activa",
+                    "definicion": "CREATE INDEX idx_asignaciontecnico_orden_activa ON public.asignaciontecnico USING btree (id_orden_trabajo, tipo_asignacion) WHERE (fecha_hora_final IS NULL)"
+                },
+                {
+                    "nombre": "idx_asignaciontecnico_tecnico",
+                    "definicion": "CREATE INDEX idx_asignaciontecnico_tecnico ON public.asignaciontecnico USING btree (id_tecnico, fecha_hora_final)"
+                },
+                {
+                    "nombre": "idx_asignaciontecnico_tecnico_activo",
+                    "definicion": "CREATE INDEX idx_asignaciontecnico_tecnico_activo ON public.asignaciontecnico USING btree (id_tecnico, tipo_asignacion) WHERE (fecha_hora_final IS NULL)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('asignaciontecnico_id_seq'::regclass)",
                     "posicion": 1,
@@ -96,7 +108,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -104,7 +116,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_tecnico",
                     "default": null,
                     "posicion": 3,
@@ -112,7 +124,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_hora_inicio",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 4,
@@ -120,7 +132,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_hora_final",
                     "default": null,
                     "posicion": 5,
@@ -128,15 +140,15 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "tipo_asignacion",
                     "default": "'diagnostico'::character varying",
                     "posicion": 6,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_hora_final_estimada",
                     "default": null,
                     "posicion": 7,
@@ -188,7 +200,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('avance_trabajo_id_seq'::regclass)",
                     "posicion": 1,
@@ -196,7 +208,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -204,7 +216,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_tecnico",
                     "default": null,
                     "posicion": 3,
@@ -212,12 +224,12 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "titulo",
                     "default": null,
                     "posicion": 4,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(200)"
+                    "tipo_completo": "character varying(200)"
                 },
                 {
                     "tipo": "text",
@@ -236,12 +248,12 @@
                     "tipo_completo": "jsonb"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": "'pendiente'::character varying",
                     "posicion": 7,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
                     "tipo": "text",
@@ -252,7 +264,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_creacion",
                     "default": "now()",
                     "posicion": 9,
@@ -260,7 +272,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_aprobacion",
                     "default": null,
                     "posicion": 10,
@@ -268,7 +280,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "aprobado_por",
                     "default": null,
                     "posicion": 11,
@@ -276,7 +288,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_actualizacion",
                     "default": null,
                     "posicion": 12,
@@ -284,7 +296,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "numero_actualizaciones",
                     "default": "0",
                     "posicion": 13,
@@ -292,7 +304,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "numero_avance",
                     "default": "0",
                     "posicion": 14,
@@ -338,7 +350,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('avancetrabajo_id_seq'::regclass)",
                     "posicion": 1,
@@ -346,7 +358,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -354,7 +366,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_tecnico",
                     "default": null,
                     "posicion": 3,
@@ -362,7 +374,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_hora",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 4,
@@ -378,20 +390,20 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "tipo_avance",
                     "default": null,
                     "posicion": 6,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado_asociado",
                     "default": null,
                     "posicion": 7,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 }
             ],
             "clave_primaria": [
@@ -426,7 +438,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('carritoherramientas_id_seq'::regclass)",
                     "posicion": 1,
@@ -434,7 +446,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_tecnico",
                     "default": null,
                     "posicion": 2,
@@ -442,28 +454,28 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "nombre",
                     "default": null,
                     "posicion": 3,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(200)"
+                    "tipo_completo": "character varying(200)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "codigo",
                     "default": null,
                     "posicion": 4,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": null,
                     "posicion": 5,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 }
             ],
             "clave_primaria": [
@@ -495,16 +507,20 @@
                 },
                 {
                     "nombre": "idx_cliente_documento",
-                    "definicion": "CREATE UNIQUE INDEX idx_cliente_documento ON public.cliente USING btree (numero_documento)"
+                    "definicion": "CREATE INDEX idx_cliente_documento ON public.cliente USING btree (numero_documento)"
                 },
                 {
                     "nombre": "idx_cliente_email",
-                    "definicion": "CREATE UNIQUE INDEX idx_cliente_email ON public.cliente USING btree (email)"
+                    "definicion": "CREATE INDEX idx_cliente_email ON public.cliente USING btree (email)"
+                },
+                {
+                    "nombre": "idx_cliente_empresa",
+                    "definicion": "CREATE INDEX idx_cliente_empresa ON public.cliente USING btree (nombre_empresa) WHERE (es_empresa = true)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('cliente_id_seq'::regclass)",
                     "posicion": 1,
@@ -512,7 +528,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_usuario",
                     "default": null,
                     "posicion": 2,
@@ -520,28 +536,28 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "tipo_documento",
                     "default": null,
                     "posicion": 3,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "numero_documento",
                     "default": null,
                     "posicion": 4,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "email",
                     "default": null,
                     "posicion": 5,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(255)"
+                    "tipo_completo": "character varying(255)"
                 },
                 {
                     "tipo": "numeric",
@@ -560,12 +576,156 @@
                     "tipo_completo": "numeric(11,8)"
                 },
                 {
-                    "tipo": "boolean",
+                    "tipo": "bool",
                     "nombre": "ubicacion_confirmada",
                     "default": "false",
                     "posicion": 8,
                     "obligatorio": false,
                     "tipo_completo": "boolean"
+                },
+                {
+                    "tipo": "bool",
+                    "nombre": "es_propietario",
+                    "default": "true",
+                    "posicion": 9,
+                    "obligatorio": false,
+                    "tipo_completo": "boolean"
+                },
+                {
+                    "tipo": "varchar",
+                    "nombre": "tipo_tercero",
+                    "default": null,
+                    "posicion": 10,
+                    "obligatorio": false,
+                    "tipo_completo": "character varying(50)"
+                },
+                {
+                    "tipo": "varchar",
+                    "nombre": "nombre_tercero",
+                    "default": null,
+                    "posicion": 11,
+                    "obligatorio": false,
+                    "tipo_completo": "character varying(200)"
+                },
+                {
+                    "tipo": "varchar",
+                    "nombre": "telefono_tercero",
+                    "default": null,
+                    "posicion": 12,
+                    "obligatorio": false,
+                    "tipo_completo": "character varying(50)"
+                },
+                {
+                    "tipo": "bool",
+                    "nombre": "es_empresa",
+                    "default": "false",
+                    "posicion": 13,
+                    "obligatorio": false,
+                    "tipo_completo": "boolean"
+                },
+                {
+                    "tipo": "varchar",
+                    "nombre": "nombre_empresa",
+                    "default": null,
+                    "posicion": 14,
+                    "obligatorio": false,
+                    "tipo_completo": "character varying(200)"
+                },
+                {
+                    "tipo": "varchar",
+                    "nombre": "nit_empresa",
+                    "default": null,
+                    "posicion": 15,
+                    "obligatorio": false,
+                    "tipo_completo": "character varying(50)"
+                },
+                {
+                    "tipo": "varchar",
+                    "nombre": "nombre_propietario_real",
+                    "default": null,
+                    "posicion": 16,
+                    "obligatorio": false,
+                    "tipo_completo": "character varying(200)"
+                },
+                {
+                    "tipo": "varchar",
+                    "nombre": "telefono_propietario_real",
+                    "default": null,
+                    "posicion": 17,
+                    "obligatorio": false,
+                    "tipo_completo": "character varying(50)"
+                },
+                {
+                    "tipo": "text",
+                    "nombre": "ubicacion_tercero",
+                    "default": null,
+                    "posicion": 18,
+                    "obligatorio": false,
+                    "tipo_completo": "text"
+                },
+                {
+                    "tipo": "numeric",
+                    "nombre": "ubicacion_tercero_latitud",
+                    "default": null,
+                    "posicion": 19,
+                    "obligatorio": false,
+                    "tipo_completo": "numeric(10,8)"
+                },
+                {
+                    "tipo": "numeric",
+                    "nombre": "ubicacion_tercero_longitud",
+                    "default": null,
+                    "posicion": 20,
+                    "obligatorio": false,
+                    "tipo_completo": "numeric(11,8)"
+                },
+                {
+                    "tipo": "text",
+                    "nombre": "ubicacion_empresa",
+                    "default": null,
+                    "posicion": 21,
+                    "obligatorio": false,
+                    "tipo_completo": "text"
+                },
+                {
+                    "tipo": "numeric",
+                    "nombre": "ubicacion_empresa_latitud",
+                    "default": null,
+                    "posicion": 22,
+                    "obligatorio": false,
+                    "tipo_completo": "numeric(10,8)"
+                },
+                {
+                    "tipo": "numeric",
+                    "nombre": "ubicacion_empresa_longitud",
+                    "default": null,
+                    "posicion": 23,
+                    "obligatorio": false,
+                    "tipo_completo": "numeric(11,8)"
+                },
+                {
+                    "tipo": "text",
+                    "nombre": "ubicacion_propietario_real",
+                    "default": null,
+                    "posicion": 24,
+                    "obligatorio": false,
+                    "tipo_completo": "text"
+                },
+                {
+                    "tipo": "numeric",
+                    "nombre": "ubicacion_propietario_latitud",
+                    "default": null,
+                    "posicion": 25,
+                    "obligatorio": false,
+                    "tipo_completo": "numeric(10,8)"
+                },
+                {
+                    "tipo": "numeric",
+                    "nombre": "ubicacion_propietario_longitud",
+                    "default": null,
+                    "posicion": 26,
+                    "obligatorio": false,
+                    "tipo_completo": "numeric(11,8)"
                 }
             ],
             "clave_primaria": [
@@ -574,7 +734,7 @@
             "claves_foraneas": [
                 {
                     "columna": "id_usuario",
-                    "constraint": "cliente_id_usuario_fkey",
+                    "constraint": "fk_cliente_usuario",
                     "tabla_referenciada": "usuario",
                     "columna_referenciada": "id"
                 }
@@ -586,11 +746,19 @@
                 {
                     "nombre": "codigoverificacion_pkey",
                     "definicion": "CREATE UNIQUE INDEX codigoverificacion_pkey ON public.codigoverificacion USING btree (id)"
+                },
+                {
+                    "nombre": "idx_codigo_verificacion_codigo",
+                    "definicion": "CREATE INDEX idx_codigo_verificacion_codigo ON public.codigoverificacion USING btree (codigo)"
+                },
+                {
+                    "nombre": "idx_codigo_verificacion_email",
+                    "definicion": "CREATE INDEX idx_codigo_verificacion_email ON public.codigoverificacion USING btree (email)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('codigoverificacion_id_seq'::regclass)",
                     "posicion": 1,
@@ -598,31 +766,31 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "email",
                     "default": null,
                     "posicion": 2,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(255)"
+                    "tipo_completo": "character varying(255)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "codigo",
                     "default": null,
                     "posicion": 3,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(6)"
+                    "tipo_completo": "character varying(6)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "tipo",
                     "default": null,
                     "posicion": 4,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "expira",
                     "default": null,
                     "posicion": 5,
@@ -630,7 +798,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "boolean",
+                    "tipo": "bool",
                     "nombre": "usado",
                     "default": "false",
                     "posicion": 6,
@@ -638,7 +806,7 @@
                     "tipo_completo": "boolean"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_creacion",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 7,
@@ -670,7 +838,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('compradetalle_id_seq'::regclass)",
                     "posicion": 1,
@@ -678,7 +846,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_compra",
                     "default": null,
                     "posicion": 2,
@@ -686,7 +854,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_repuesto",
                     "default": null,
                     "posicion": 3,
@@ -694,7 +862,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "cantidad",
                     "default": null,
                     "posicion": 4,
@@ -750,7 +918,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('comprarepuesto_id_seq'::regclass)",
                     "posicion": 1,
@@ -758,7 +926,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_proveedor",
                     "default": null,
                     "posicion": 2,
@@ -766,7 +934,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_encargado_repuestos",
                     "default": null,
                     "posicion": 3,
@@ -774,7 +942,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_compra",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 4,
@@ -824,6 +992,10 @@
                     "definicion": "CREATE UNIQUE INDEX comunicado_pkey ON public.comunicado USING btree (id)"
                 },
                 {
+                    "nombre": "idx_comunicado_destinatarios",
+                    "definicion": "CREATE INDEX idx_comunicado_destinatarios ON public.comunicado USING gin (destinatarios)"
+                },
+                {
                     "nombre": "idx_comunicado_estado",
                     "definicion": "CREATE INDEX idx_comunicado_estado ON public.comunicado USING btree (estado)"
                 },
@@ -838,7 +1010,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('comunicado_id_seq'::regclass)",
                     "posicion": 1,
@@ -846,12 +1018,12 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "titulo",
                     "default": null,
                     "posicion": 2,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(255)"
+                    "tipo_completo": "character varying(255)"
                 },
                 {
                     "tipo": "text",
@@ -862,20 +1034,20 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "prioridad",
                     "default": "'normal'::character varying",
                     "posicion": 4,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": "'activo'::character varying",
                     "posicion": 5,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
                     "tipo": "jsonb",
@@ -886,7 +1058,7 @@
                     "tipo_completo": "jsonb"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_creacion",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 7,
@@ -894,7 +1066,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_actualizacion",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 8,
@@ -902,7 +1074,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "creado_por",
                     "default": null,
                     "posicion": 9,
@@ -936,7 +1108,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('configuracion_taller_id_seq'::regclass)",
                     "posicion": 1,
@@ -944,12 +1116,12 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "clave",
                     "default": null,
                     "posicion": 2,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 },
                 {
                     "tipo": "text",
@@ -960,7 +1132,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "actualizado_en",
                     "default": "now()",
                     "posicion": 4,
@@ -984,7 +1156,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('controlcarrito_id_seq'::regclass)",
                     "posicion": 1,
@@ -992,7 +1164,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_carritoherramienta",
                     "default": null,
                     "posicion": 2,
@@ -1000,7 +1172,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_control",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 3,
@@ -1008,12 +1180,12 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado_encontrado",
                     "default": null,
                     "posicion": 4,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 },
                 {
                     "tipo": "text",
@@ -1056,13 +1228,25 @@
                     "definicion": "CREATE INDEX idx_cotizacion_estado ON public.cotizacion USING btree (estado)"
                 },
                 {
-                    "nombre": "idx_cotizacion_orden",
-                    "definicion": "CREATE INDEX idx_cotizacion_orden ON public.cotizacion USING btree (id_orden_trabajo)"
+                    "nombre": "idx_cotizacion_fecha_creacion",
+                    "definicion": "CREATE INDEX idx_cotizacion_fecha_creacion ON public.cotizacion USING btree (fecha_creacion)"
+                },
+                {
+                    "nombre": "idx_cotizacion_fecha_envio",
+                    "definicion": "CREATE INDEX idx_cotizacion_fecha_envio ON public.cotizacion USING btree (fecha_envio)"
+                },
+                {
+                    "nombre": "idx_cotizacion_id_orden",
+                    "definicion": "CREATE INDEX idx_cotizacion_id_orden ON public.cotizacion USING btree (id_orden_trabajo)"
+                },
+                {
+                    "nombre": "idx_cotizacion_jefe_taller",
+                    "definicion": "CREATE INDEX idx_cotizacion_jefe_taller ON public.cotizacion USING btree (id_jefe_taller)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('cotizacion_id_seq'::regclass)",
                     "posicion": 1,
@@ -1070,7 +1254,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -1078,7 +1262,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_generacion",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 3,
@@ -1086,12 +1270,12 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": "'Enviada'::character varying",
                     "posicion": 4,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
                     "tipo": "text",
@@ -1126,7 +1310,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_jefe_taller",
                     "default": null,
                     "posicion": 9,
@@ -1134,7 +1318,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_actualizacion",
                     "default": null,
                     "posicion": 10,
@@ -1142,7 +1326,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_envio",
                     "default": null,
                     "posicion": 11,
@@ -1158,15 +1342,15 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "nombre_archivo",
                     "default": null,
                     "posicion": 13,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(255)"
+                    "tipo_completo": "character varying(255)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_creacion",
                     "default": "now()",
                     "posicion": 14,
@@ -1174,7 +1358,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_ultima_modificacion",
                     "default": null,
                     "posicion": 15,
@@ -1182,7 +1366,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "boolean",
+                    "tipo": "bool",
                     "nombre": "puede_editar",
                     "default": "true",
                     "posicion": 16,
@@ -1190,7 +1374,7 @@
                     "tipo_completo": "boolean"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "ventana_edicion_horas",
                     "default": "1",
                     "posicion": 17,
@@ -1206,7 +1390,7 @@
                     "tipo_completo": "jsonb"
                 },
                 {
-                    "tipo": "boolean",
+                    "tipo": "bool",
                     "nombre": "trabajo_iniciado",
                     "default": "false",
                     "posicion": 19,
@@ -1230,7 +1414,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_rechazo",
                     "default": null,
                     "posicion": 22,
@@ -1254,7 +1438,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_solicitud_cambios",
                     "default": null,
                     "posicion": 25,
@@ -1316,13 +1500,17 @@
             "tabla": "cotizacion_servicio",
             "indices": [
                 {
+                    "nombre": "cotizacion_servicio_id_cotizacion_id_servicio_key",
+                    "definicion": "CREATE UNIQUE INDEX cotizacion_servicio_id_cotizacion_id_servicio_key ON public.cotizacion_servicio USING btree (id_cotizacion, id_servicio)"
+                },
+                {
                     "nombre": "cotizacion_servicio_pkey",
                     "definicion": "CREATE UNIQUE INDEX cotizacion_servicio_pkey ON public.cotizacion_servicio USING btree (id)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('cotizacion_servicio_id_seq'::regclass)",
                     "posicion": 1,
@@ -1330,7 +1518,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_cotizacion",
                     "default": null,
                     "posicion": 2,
@@ -1338,7 +1526,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_servicio",
                     "default": null,
                     "posicion": 3,
@@ -1354,7 +1542,7 @@
                     "tipo_completo": "numeric(10,2)"
                 },
                 {
-                    "tipo": "boolean",
+                    "tipo": "bool",
                     "nombre": "aprobado_por_cliente",
                     "default": "false",
                     "posicion": 5,
@@ -1362,7 +1550,7 @@
                     "tipo_completo": "boolean"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_aprobacion",
                     "default": null,
                     "posicion": 6,
@@ -1394,11 +1582,19 @@
                 {
                     "nombre": "cotizacion_temporal_pkey",
                     "definicion": "CREATE UNIQUE INDEX cotizacion_temporal_pkey ON public.cotizacion_temporal USING btree (id)"
+                },
+                {
+                    "nombre": "idx_cotizacion_temporal_jefe",
+                    "definicion": "CREATE INDEX idx_cotizacion_temporal_jefe ON public.cotizacion_temporal USING btree (id_jefe_taller)"
+                },
+                {
+                    "nombre": "idx_cotizacion_temporal_orden",
+                    "definicion": "CREATE INDEX idx_cotizacion_temporal_orden ON public.cotizacion_temporal USING btree (id_orden_trabajo)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('cotizacion_temporal_id_seq'::regclass)",
                     "posicion": 1,
@@ -1406,7 +1602,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -1414,7 +1610,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_jefe_taller",
                     "default": null,
                     "posicion": 3,
@@ -1430,7 +1626,7 @@
                     "tipo_completo": "jsonb"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_creacion",
                     "default": "now()",
                     "posicion": 5,
@@ -1438,7 +1634,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_actualizacion",
                     "default": "now()",
                     "posicion": 6,
@@ -1474,7 +1670,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('cotizaciondetalle_id_seq'::regclass)",
                     "posicion": 1,
@@ -1482,7 +1678,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_cotizacion",
                     "default": null,
                     "posicion": 2,
@@ -1490,7 +1686,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_servicio",
                     "default": null,
                     "posicion": 3,
@@ -1514,7 +1710,7 @@
                     "tipo_completo": "numeric(10,2)"
                 },
                 {
-                    "tipo": "boolean",
+                    "tipo": "bool",
                     "nombre": "aprobado_por_cliente",
                     "default": "false",
                     "posicion": 6,
@@ -1530,6 +1726,12 @@
                     "columna": "id_cotizacion",
                     "constraint": "cotizaciondetalle_id_cotizacion_fkey",
                     "tabla_referenciada": "cotizacion",
+                    "columna_referenciada": "id"
+                },
+                {
+                    "columna": "id_servicio",
+                    "constraint": "cotizaciondetalle_id_servicio_fkey",
+                    "tabla_referenciada": "servicio",
                     "columna_referenciada": "id"
                 }
             ]
@@ -1548,7 +1750,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('diagnostico_tecnico_id_seq'::regclass)",
                     "posicion": 1,
@@ -1556,7 +1758,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -1564,7 +1766,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_tecnico",
                     "default": null,
                     "posicion": 3,
@@ -1596,15 +1798,15 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": null,
                     "posicion": 7,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_envio",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 8,
@@ -1612,7 +1814,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "version",
                     "default": "1",
                     "posicion": 9,
@@ -1620,7 +1822,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "max_fotos",
                     "default": "2",
                     "posicion": 10,
@@ -1628,7 +1830,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "boolean",
+                    "tipo": "bool",
                     "nombre": "es_borrador",
                     "default": "true",
                     "posicion": 11,
@@ -1636,7 +1838,7 @@
                     "tipo_completo": "boolean"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_modificacion",
                     "default": "now()",
                     "posicion": 12,
@@ -1672,7 +1874,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('diagnostigoinicial_id_seq'::regclass)",
                     "posicion": 1,
@@ -1680,7 +1882,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -1688,7 +1890,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_jefe_taller",
                     "default": null,
                     "posicion": 3,
@@ -1704,7 +1906,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_hora",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 5,
@@ -1748,7 +1950,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('filtro_herramienta_id_seq'::regclass)",
                     "posicion": 1,
@@ -1756,12 +1958,12 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "nombre_filtro",
                     "default": null,
                     "posicion": 2,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 },
                 {
                     "tipo": "text",
@@ -1788,7 +1990,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('foto_avance_id_seq'::regclass)",
                     "posicion": 1,
@@ -1796,7 +1998,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_avance",
                     "default": null,
                     "posicion": 2,
@@ -1812,15 +2014,15 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "descripcion_tecnico",
                     "default": null,
                     "posicion": 4,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(255)"
+                    "tipo_completo": "character varying(255)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_subida",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 5,
@@ -1850,7 +2052,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('foto_diagnostico_id_seq'::regclass)",
                     "posicion": 1,
@@ -1858,7 +2060,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_diagnostico_tecnico",
                     "default": null,
                     "posicion": 2,
@@ -1874,12 +2076,12 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "descripcion_tecnico",
                     "default": null,
                     "posicion": 4,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(255)"
+                    "tipo_completo": "character varying(255)"
                 },
                 {
                     "tipo": "text",
@@ -1912,7 +2114,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('herramienta_id_seq'::regclass)",
                     "posicion": 1,
@@ -1920,7 +2122,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_carritoherramienta",
                     "default": null,
                     "posicion": 2,
@@ -1928,36 +2130,36 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "nombre",
                     "default": null,
                     "posicion": 3,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(200)"
+                    "tipo_completo": "character varying(200)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "descripcion",
                     "default": null,
                     "posicion": 4,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(255)"
+                    "tipo_completo": "character varying(255)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "tipo",
                     "default": null,
                     "posicion": 5,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "marca",
                     "default": null,
                     "posicion": 6,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 }
             ],
             "clave_primaria": [
@@ -1976,13 +2178,21 @@
             "tabla": "instrucciones_tecnico_historial",
             "indices": [
                 {
+                    "nombre": "idx_instrucciones_leida",
+                    "definicion": "CREATE INDEX idx_instrucciones_leida ON public.instrucciones_tecnico_historial USING btree (leida)"
+                },
+                {
+                    "nombre": "idx_instrucciones_orden",
+                    "definicion": "CREATE INDEX idx_instrucciones_orden ON public.instrucciones_tecnico_historial USING btree (id_orden_trabajo)"
+                },
+                {
                     "nombre": "instrucciones_tecnico_historial_pkey",
                     "definicion": "CREATE UNIQUE INDEX instrucciones_tecnico_historial_pkey ON public.instrucciones_tecnico_historial USING btree (id)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('instrucciones_tecnico_historial_id_seq'::regclass)",
                     "posicion": 1,
@@ -1990,7 +2200,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -1998,7 +2208,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_jefe_taller",
                     "default": null,
                     "posicion": 3,
@@ -2014,7 +2224,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_envio",
                     "default": "now()",
                     "posicion": 5,
@@ -2022,7 +2232,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "boolean",
+                    "tipo": "bool",
                     "nombre": "leida",
                     "default": "false",
                     "posicion": 6,
@@ -2030,7 +2240,7 @@
                     "tipo_completo": "boolean"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_leida",
                     "default": null,
                     "posicion": 7,
@@ -2060,6 +2270,10 @@
             "tabla": "notificacion",
             "indices": [
                 {
+                    "nombre": "idx_notificacion_id_referencia",
+                    "definicion": "CREATE INDEX idx_notificacion_id_referencia ON public.notificacion USING btree (id_referencia)"
+                },
+                {
                     "nombre": "idx_notificacion_leida",
                     "definicion": "CREATE INDEX idx_notificacion_leida ON public.notificacion USING btree (leida)"
                 },
@@ -2074,7 +2288,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('notificacion_id_seq'::regclass)",
                     "posicion": 1,
@@ -2082,7 +2296,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_usuario_destino",
                     "default": null,
                     "posicion": 2,
@@ -2090,12 +2304,12 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "tipo",
                     "default": null,
                     "posicion": 3,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 },
                 {
                     "tipo": "text",
@@ -2106,7 +2320,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_envio",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 5,
@@ -2114,7 +2328,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "boolean",
+                    "tipo": "bool",
                     "nombre": "leida",
                     "default": "false",
                     "posicion": 6,
@@ -2122,7 +2336,7 @@
                     "tipo_completo": "boolean"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_referencia",
                     "default": null,
                     "posicion": 7,
@@ -2146,13 +2360,21 @@
             "tabla": "notificacionadmin",
             "indices": [
                 {
+                    "nombre": "idx_notificacion_admin",
+                    "definicion": "CREATE INDEX idx_notificacion_admin ON public.notificacionadmin USING btree (id_admin_general)"
+                },
+                {
+                    "nombre": "idx_notificacion_admin_leida",
+                    "definicion": "CREATE INDEX idx_notificacion_admin_leida ON public.notificacionadmin USING btree (leida)"
+                },
+                {
                     "nombre": "notificacionadmin_pkey",
                     "definicion": "CREATE UNIQUE INDEX notificacionadmin_pkey ON public.notificacionadmin USING btree (id)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('notificacionadmin_id_seq'::regclass)",
                     "posicion": 1,
@@ -2160,7 +2382,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_admin_general",
                     "default": null,
                     "posicion": 2,
@@ -2168,20 +2390,20 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "tipo",
                     "default": null,
                     "posicion": 3,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "titulo",
                     "default": null,
                     "posicion": 4,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(200)"
+                    "tipo_completo": "character varying(200)"
                 },
                 {
                     "tipo": "text",
@@ -2192,7 +2414,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "boolean",
+                    "tipo": "bool",
                     "nombre": "leida",
                     "default": "false",
                     "posicion": 6,
@@ -2200,7 +2422,7 @@
                     "tipo_completo": "boolean"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_creacion",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 7,
@@ -2230,7 +2452,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('observaciondiagnostico_id_seq'::regclass)",
                     "posicion": 1,
@@ -2238,7 +2460,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_diagnostico_tecnico",
                     "default": null,
                     "posicion": 2,
@@ -2246,7 +2468,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_jefe_taller",
                     "default": null,
                     "posicion": 3,
@@ -2278,7 +2500,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_hora",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 7,
@@ -2286,7 +2508,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "version_diagnostico",
                     "default": "1",
                     "posicion": 8,
@@ -2324,6 +2546,26 @@
                     "definicion": "CREATE INDEX idx_ordentrabajo_estado ON public.ordentrabajo USING btree (estado_global)"
                 },
                 {
+                    "nombre": "idx_ordentrabajo_estado_fecha",
+                    "definicion": "CREATE INDEX idx_ordentrabajo_estado_fecha ON public.ordentrabajo USING btree (estado_global, fecha_ingreso DESC)"
+                },
+                {
+                    "nombre": "idx_ordentrabajo_estado_global",
+                    "definicion": "CREATE INDEX idx_ordentrabajo_estado_global ON public.ordentrabajo USING btree (estado_global)"
+                },
+                {
+                    "nombre": "idx_ordentrabajo_fecha_estimada",
+                    "definicion": "CREATE INDEX idx_ordentrabajo_fecha_estimada ON public.ordentrabajo USING btree (fecha_estimada_finalizacion) WHERE ((estado_global)::text <> ALL ((ARRAY['Finalizado'::character varying, 'Entregado'::character varying])::text[]))"
+                },
+                {
+                    "nombre": "idx_ordentrabajo_fecha_ingreso",
+                    "definicion": "CREATE INDEX idx_ordentrabajo_fecha_ingreso ON public.ordentrabajo USING btree (fecha_ingreso DESC)"
+                },
+                {
+                    "nombre": "idx_ordentrabajo_jefe_operativo_2",
+                    "definicion": "CREATE INDEX idx_ordentrabajo_jefe_operativo_2 ON public.ordentrabajo USING btree (id_jefe_operativo_2)"
+                },
+                {
                     "nombre": "idx_ordentrabajo_vehiculo",
                     "definicion": "CREATE INDEX idx_ordentrabajo_vehiculo ON public.ordentrabajo USING btree (id_vehiculo)"
                 },
@@ -2338,7 +2580,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('ordentrabajo_id_seq'::regclass)",
                     "posicion": 1,
@@ -2346,15 +2588,15 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "codigo_unico",
                     "default": null,
                     "posicion": 2,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_vehiculo",
                     "default": null,
                     "posicion": 3,
@@ -2362,7 +2604,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_jefe_operativo",
                     "default": null,
                     "posicion": 4,
@@ -2370,7 +2612,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_ingreso",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 5,
@@ -2378,7 +2620,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_salida",
                     "default": null,
                     "posicion": 6,
@@ -2386,15 +2628,15 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado_global",
                     "default": "'EnRecepcion'::character varying",
                     "posicion": 7,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_jefe_operativo_2",
                     "default": null,
                     "posicion": 8,
@@ -2410,7 +2652,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_instrucciones",
                     "default": null,
                     "posicion": 10,
@@ -2418,7 +2660,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_jefe_taller_instrucciones",
                     "default": null,
                     "posicion": 11,
@@ -2426,7 +2668,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_inicio_armado",
                     "default": null,
                     "posicion": 12,
@@ -2434,7 +2676,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_fin_armado",
                     "default": null,
                     "posicion": 13,
@@ -2458,7 +2700,7 @@
                     "tipo_completo": "numeric(10,2)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_cotizacion_aceptada",
                     "default": null,
                     "posicion": 16,
@@ -2466,7 +2708,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_cotizacion_rechazada",
                     "default": null,
                     "posicion": 17,
@@ -2474,7 +2716,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_estimada_finalizacion",
                     "default": null,
                     "posicion": 18,
@@ -2482,7 +2724,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "dias_estimados_reparacion",
                     "default": null,
                     "posicion": 19,
@@ -2496,7 +2738,7 @@
             "claves_foraneas": [
                 {
                     "columna": "id_jefe_operativo_2",
-                    "constraint": "ordentrabajo_id_jefe_operativo_2_fkey",
+                    "constraint": "fk_ordentrabajo_jefe_operativo_2",
                     "tabla_referenciada": "usuario",
                     "columna_referenciada": "id"
                 },
@@ -2524,6 +2766,18 @@
             "tabla": "planificacion",
             "indices": [
                 {
+                    "nombre": "idx_planificacion_bahia",
+                    "definicion": "CREATE INDEX idx_planificacion_bahia ON public.planificacion USING btree (bahia_asignada, fecha_hora_inicio_estimado)"
+                },
+                {
+                    "nombre": "idx_planificacion_bahia_fechas",
+                    "definicion": "CREATE INDEX idx_planificacion_bahia_fechas ON public.planificacion USING btree (bahia_asignada, fecha_hora_inicio_estimado, fecha_hora_fin_estimado)"
+                },
+                {
+                    "nombre": "idx_planificacion_orden",
+                    "definicion": "CREATE INDEX idx_planificacion_orden ON public.planificacion USING btree (id_orden_trabajo)"
+                },
+                {
                     "nombre": "planificacion_id_orden_trabajo_key",
                     "definicion": "CREATE UNIQUE INDEX planificacion_id_orden_trabajo_key ON public.planificacion USING btree (id_orden_trabajo)"
                 },
@@ -2534,7 +2788,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('planificacion_id_seq'::regclass)",
                     "posicion": 1,
@@ -2542,7 +2796,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -2550,7 +2804,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "bahia_asignada",
                     "default": null,
                     "posicion": 3,
@@ -2566,7 +2820,7 @@
                     "tipo_completo": "numeric(5,2)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_hora_inicio_estimado",
                     "default": null,
                     "posicion": 5,
@@ -2574,7 +2828,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_hora_fin_estimado",
                     "default": null,
                     "posicion": 6,
@@ -2582,7 +2836,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_hora_inicio_real",
                     "default": null,
                     "posicion": 7,
@@ -2590,7 +2844,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_hora_fin_real",
                     "default": null,
                     "posicion": 8,
@@ -2614,13 +2868,17 @@
             "tabla": "proveedor",
             "indices": [
                 {
+                    "nombre": "idx_proveedor_filtro",
+                    "definicion": "CREATE INDEX idx_proveedor_filtro ON public.proveedor USING btree (id_filtro)"
+                },
+                {
                     "nombre": "proveedor_pkey",
                     "definicion": "CREATE UNIQUE INDEX proveedor_pkey ON public.proveedor USING btree (id)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('proveedor_id_seq'::regclass)",
                     "posicion": 1,
@@ -2628,7 +2886,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_filtro",
                     "default": null,
                     "posicion": 2,
@@ -2636,39 +2894,39 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "nombre",
                     "default": null,
                     "posicion": 3,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(200)"
+                    "tipo_completo": "character varying(200)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "telefono",
                     "default": null,
                     "posicion": 4,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "ubicacion_gps",
                     "default": null,
                     "posicion": 5,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(255)"
+                    "tipo_completo": "character varying(255)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "propietario",
                     "default": null,
                     "posicion": 6,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(200)"
+                    "tipo_completo": "character varying(200)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "created_at",
                     "default": "now()",
                     "posicion": 7,
@@ -2676,7 +2934,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "updated_at",
                     "default": "now()",
                     "posicion": 8,
@@ -2698,7 +2956,7 @@
             "claves_foraneas": [
                 {
                     "columna": "id_filtro",
-                    "constraint": "proveedor_id_filtro_fkey",
+                    "constraint": "fk_proveedor_filtro",
                     "tabla_referenciada": "filtro_herramienta",
                     "columna_referenciada": "id"
                 }
@@ -2718,7 +2976,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('recepcion_id_seq'::regclass)",
                     "posicion": 1,
@@ -2726,7 +2984,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -2836,7 +3094,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('rendiciondiaria_id_seq'::regclass)",
                     "posicion": 1,
@@ -2844,7 +3102,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_encargado_repuestos",
                     "default": null,
                     "posicion": 2,
@@ -2852,7 +3110,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_jefe_operativo",
                     "default": null,
                     "posicion": 3,
@@ -2912,7 +3170,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('rendicionsemanal_id_seq'::regclass)",
                     "posicion": 1,
@@ -2920,7 +3178,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_admin_general",
                     "default": null,
                     "posicion": 2,
@@ -2928,7 +3186,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_jefe_operativo",
                     "default": null,
                     "posicion": 3,
@@ -3004,7 +3262,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('repuesto_id_seq'::regclass)",
                     "posicion": 1,
@@ -3012,20 +3270,20 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "codigo",
                     "default": null,
                     "posicion": 2,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "nombre",
                     "default": null,
                     "posicion": 3,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(200)"
+                    "tipo_completo": "character varying(200)"
                 },
                 {
                     "tipo": "text",
@@ -3036,7 +3294,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "cantidad_stock",
                     "default": "0",
                     "posicion": 5,
@@ -3068,7 +3326,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('rol_id_seq'::regclass)",
                     "posicion": 1,
@@ -3076,12 +3334,12 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "nombre_rol",
                     "default": null,
                     "posicion": 2,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 },
                 {
                     "tipo": "text",
@@ -3108,7 +3366,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('seguimientoorden_id_seq'::regclass)",
                     "posicion": 1,
@@ -3116,7 +3374,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -3124,12 +3382,12 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": null,
                     "posicion": 3,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
                     "tipo": "text",
@@ -3140,7 +3398,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_hora_cambio",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 5,
@@ -3148,7 +3406,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "notificaciones_enviadas",
                     "default": "0",
                     "posicion": 6,
@@ -3178,7 +3436,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('servicio_id_seq'::regclass)",
                     "posicion": 1,
@@ -3186,7 +3444,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_diagnostico_tecnico",
                     "default": null,
                     "posicion": 2,
@@ -3224,7 +3482,7 @@
             "claves_foraneas": [
                 {
                     "columna": "id_diagnostico_tecnico",
-                    "constraint": "servicio_id_diagnostico_tecnico_fkey",
+                    "constraint": "fk_servicio_diagnostico",
                     "tabla_referenciada": "diagnostico_tecnico",
                     "columna_referenciada": "id"
                 }
@@ -3244,7 +3502,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('servicio_precio_id_seq'::regclass)",
                     "posicion": 1,
@@ -3252,7 +3510,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_servicio",
                     "default": null,
                     "posicion": 2,
@@ -3260,7 +3518,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_jefe_taller",
                     "default": null,
                     "posicion": 3,
@@ -3284,7 +3542,7 @@
                     "tipo_completo": "numeric(10,2)"
                 },
                 {
-                    "tipo": "boolean",
+                    "tipo": "bool",
                     "nombre": "aprobado_por_jefe_operativo",
                     "default": "false",
                     "posicion": 6,
@@ -3292,7 +3550,7 @@
                     "tipo_completo": "boolean"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "aprobado_en",
                     "default": null,
                     "posicion": 7,
@@ -3306,7 +3564,7 @@
             "claves_foraneas": [
                 {
                     "columna": "id_jefe_taller",
-                    "constraint": "servicio_precio_id_jefe_taller_fkey",
+                    "constraint": "servicio_precio_id_jefe_operativo_fkey",
                     "tabla_referenciada": "usuario",
                     "columna_referenciada": "id"
                 },
@@ -3322,13 +3580,17 @@
             "tabla": "servicio_tecnico",
             "indices": [
                 {
+                    "nombre": "idx_servicio_tecnico_diagnostico",
+                    "definicion": "CREATE INDEX idx_servicio_tecnico_diagnostico ON public.servicio_tecnico USING btree (id_diagnostico_tecnico)"
+                },
+                {
                     "nombre": "servicio_tecnico_pkey",
                     "definicion": "CREATE UNIQUE INDEX servicio_tecnico_pkey ON public.servicio_tecnico USING btree (id)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('servicio_tecnico_id_seq'::regclass)",
                     "posicion": 1,
@@ -3336,7 +3598,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_diagnostico_tecnico",
                     "default": null,
                     "posicion": 2,
@@ -3352,7 +3614,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "orden",
                     "default": "0",
                     "posicion": 4,
@@ -3360,7 +3622,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "creado_en",
                     "default": "now()",
                     "posicion": 5,
@@ -3384,6 +3646,18 @@
             "tabla": "sesion_colaborativa",
             "indices": [
                 {
+                    "nombre": "idx_sesion_colaboradores",
+                    "definicion": "CREATE INDEX idx_sesion_colaboradores ON public.sesion_colaborativa USING gin (colaboradores_ids)"
+                },
+                {
+                    "nombre": "idx_sesion_estado",
+                    "definicion": "CREATE INDEX idx_sesion_estado ON public.sesion_colaborativa USING btree (estado)"
+                },
+                {
+                    "nombre": "idx_sesion_ultima_actividad",
+                    "definicion": "CREATE INDEX idx_sesion_ultima_actividad ON public.sesion_colaborativa USING btree (ultima_actividad)"
+                },
+                {
                     "nombre": "sesion_colaborativa_pkey",
                     "definicion": "CREATE UNIQUE INDEX sesion_colaborativa_pkey ON public.sesion_colaborativa USING btree (codigo)"
                 }
@@ -3398,7 +3672,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "creador_id",
                     "default": null,
                     "posicion": 2,
@@ -3414,20 +3688,20 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "ARRAY",
+                    "tipo": "_int4",
                     "nombre": "colaboradores_ids",
                     "default": "'{}'::integer[]",
                     "posicion": 4,
                     "obligatorio": false,
-                    "tipo_completo": "ARRAY"
+                    "tipo_completo": "integer[]"
                 },
                 {
-                    "tipo": "ARRAY",
+                    "tipo": "_text",
                     "nombre": "colaboradores_nombres",
                     "default": "'{}'::text[]",
                     "posicion": 5,
                     "obligatorio": false,
-                    "tipo_completo": "ARRAY"
+                    "tipo_completo": "text[]"
                 },
                 {
                     "tipo": "jsonb",
@@ -3454,15 +3728,15 @@
                     "tipo_completo": "jsonb"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": "'activa'::character varying",
                     "posicion": 9,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(20)"
+                    "tipo_completo": "character varying(20)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_creacion",
                     "default": "now()",
                     "posicion": 10,
@@ -3470,7 +3744,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "ultima_actividad",
                     "default": "now()",
                     "posicion": 11,
@@ -3496,13 +3770,25 @@
             "tabla": "solicitud_compra",
             "indices": [
                 {
+                    "nombre": "idx_solicitud_compra_estado",
+                    "definicion": "CREATE INDEX idx_solicitud_compra_estado ON public.solicitud_compra USING btree (estado)"
+                },
+                {
+                    "nombre": "idx_solicitud_compra_jefe",
+                    "definicion": "CREATE INDEX idx_solicitud_compra_jefe ON public.solicitud_compra USING btree (id_jefe_taller)"
+                },
+                {
+                    "nombre": "idx_solicitud_compra_orden",
+                    "definicion": "CREATE INDEX idx_solicitud_compra_orden ON public.solicitud_compra USING btree (id_orden_trabajo)"
+                },
+                {
                     "nombre": "solicitud_compra_pkey",
                     "definicion": "CREATE UNIQUE INDEX solicitud_compra_pkey ON public.solicitud_compra USING btree (id)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('solicitud_compra_id_seq'::regclass)",
                     "posicion": 1,
@@ -3510,7 +3796,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -3518,7 +3804,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_solicitud_cotizacion",
                     "default": null,
                     "posicion": 3,
@@ -3526,7 +3812,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_jefe_taller",
                     "default": null,
                     "posicion": 4,
@@ -3534,7 +3820,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_encargado_repuestos",
                     "default": null,
                     "posicion": 5,
@@ -3550,7 +3836,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "cantidad",
                     "default": "1",
                     "posicion": 7,
@@ -3574,12 +3860,12 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": "'pendiente'::character varying",
                     "posicion": 10,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
                     "tipo": "text",
@@ -3598,7 +3884,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_solicitud",
                     "default": "now()",
                     "posicion": 13,
@@ -3606,7 +3892,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_respuesta",
                     "default": null,
                     "posicion": 14,
@@ -3630,23 +3916,23 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "numero_factura",
                     "default": null,
                     "posicion": 17,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "proveedor_nombre",
                     "default": null,
                     "posicion": 18,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(200)"
+                    "tipo_completo": "character varying(200)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_compra",
                     "default": null,
                     "posicion": 19,
@@ -3654,7 +3940,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_entrega",
                     "default": null,
                     "posicion": 20,
@@ -3678,7 +3964,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "proveedor_id",
                     "default": null,
                     "posicion": 23,
@@ -3707,6 +3993,12 @@
                     "constraint": "solicitud_compra_id_orden_trabajo_fkey",
                     "tabla_referenciada": "ordentrabajo",
                     "columna_referenciada": "id"
+                },
+                {
+                    "columna": "id_solicitud_cotizacion",
+                    "constraint": "solicitud_compra_id_solicitud_cotizacion_fkey",
+                    "tabla_referenciada": "solicitud_cotizacion_repuesto",
+                    "columna_referenciada": "id"
                 }
             ]
         },
@@ -3714,13 +4006,21 @@
             "tabla": "solicitud_cotizacion_repuesto",
             "indices": [
                 {
+                    "nombre": "idx_solicitud_repuesto_estado",
+                    "definicion": "CREATE INDEX idx_solicitud_repuesto_estado ON public.solicitud_cotizacion_repuesto USING btree (estado)"
+                },
+                {
+                    "nombre": "idx_solicitud_repuesto_orden",
+                    "definicion": "CREATE INDEX idx_solicitud_repuesto_orden ON public.solicitud_cotizacion_repuesto USING btree (id_orden_trabajo)"
+                },
+                {
                     "nombre": "solicitud_cotizacion_repuesto_pkey",
                     "definicion": "CREATE UNIQUE INDEX solicitud_cotizacion_repuesto_pkey ON public.solicitud_cotizacion_repuesto USING btree (id)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('solicitud_cotizacion_repuesto_id_seq'::regclass)",
                     "posicion": 1,
@@ -3728,7 +4028,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -3736,7 +4036,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_servicio",
                     "default": null,
                     "posicion": 3,
@@ -3744,7 +4044,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_jefe_taller",
                     "default": null,
                     "posicion": 4,
@@ -3752,7 +4052,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_encargado_repuestos",
                     "default": null,
                     "posicion": 5,
@@ -3768,7 +4068,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "cantidad",
                     "default": "1",
                     "posicion": 7,
@@ -3776,12 +4076,12 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": "'pendiente'::character varying",
                     "posicion": 8,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
                     "tipo": "numeric",
@@ -3800,7 +4100,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_solicitud",
                     "default": "now()",
                     "posicion": 11,
@@ -3808,7 +4108,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_respuesta",
                     "default": null,
                     "posicion": 12,
@@ -3874,7 +4174,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('solicitud_repuestos_id_seq'::regclass)",
                     "posicion": 1,
@@ -3882,7 +4182,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -3890,7 +4190,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_tecnico",
                     "default": null,
                     "posicion": 3,
@@ -3914,15 +4214,15 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": "'pendiente'::character varying",
                     "posicion": 6,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_solicitud",
                     "default": "now()",
                     "posicion": 7,
@@ -3930,7 +4230,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_respuesta",
                     "default": null,
                     "posicion": 8,
@@ -3968,13 +4268,25 @@
             "tabla": "solicitud_repuestos_tecnico",
             "indices": [
                 {
+                    "nombre": "idx_solicitud_repuestos_estado",
+                    "definicion": "CREATE INDEX idx_solicitud_repuestos_estado ON public.solicitud_repuestos_tecnico USING btree (estado)"
+                },
+                {
+                    "nombre": "idx_solicitud_repuestos_orden",
+                    "definicion": "CREATE INDEX idx_solicitud_repuestos_orden ON public.solicitud_repuestos_tecnico USING btree (id_orden_trabajo)"
+                },
+                {
+                    "nombre": "idx_solicitud_repuestos_tecnico",
+                    "definicion": "CREATE INDEX idx_solicitud_repuestos_tecnico ON public.solicitud_repuestos_tecnico USING btree (id_tecnico)"
+                },
+                {
                     "nombre": "solicitud_repuestos_tecnico_pkey",
                     "definicion": "CREATE UNIQUE INDEX solicitud_repuestos_tecnico_pkey ON public.solicitud_repuestos_tecnico USING btree (id)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('solicitud_repuestos_tecnico_id_seq'::regclass)",
                     "posicion": 1,
@@ -3982,7 +4294,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -3990,7 +4302,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_tecnico",
                     "default": null,
                     "posicion": 3,
@@ -4014,15 +4326,15 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": "'pendiente'::character varying",
                     "posicion": 6,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_solicitud",
                     "default": "now()",
                     "posicion": 7,
@@ -4030,7 +4342,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_respuesta",
                     "default": null,
                     "posicion": 8,
@@ -4038,7 +4350,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "respondido_por",
                     "default": null,
                     "posicion": 9,
@@ -4054,7 +4366,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_entrega",
                     "default": null,
                     "posicion": 11,
@@ -4090,13 +4402,29 @@
             "tabla": "solicitud_reserva_cliente",
             "indices": [
                 {
+                    "nombre": "idx_solicitud_reserva_cliente",
+                    "definicion": "CREATE INDEX idx_solicitud_reserva_cliente ON public.solicitud_reserva_cliente USING btree (id_cliente)"
+                },
+                {
+                    "nombre": "idx_solicitud_reserva_estado",
+                    "definicion": "CREATE INDEX idx_solicitud_reserva_estado ON public.solicitud_reserva_cliente USING btree (estado)"
+                },
+                {
+                    "nombre": "idx_solicitud_reserva_fecha",
+                    "definicion": "CREATE INDEX idx_solicitud_reserva_fecha ON public.solicitud_reserva_cliente USING btree (fecha_deseada)"
+                },
+                {
+                    "nombre": "idx_solicitud_reserva_fecha_agendada",
+                    "definicion": "CREATE INDEX idx_solicitud_reserva_fecha_agendada ON public.solicitud_reserva_cliente USING btree (fecha_agendada)"
+                },
+                {
                     "nombre": "solicitud_reserva_cliente_pkey",
                     "definicion": "CREATE UNIQUE INDEX solicitud_reserva_cliente_pkey ON public.solicitud_reserva_cliente USING btree (id)"
                 }
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('solicitud_reserva_cliente_id_seq'::regclass)",
                     "posicion": 1,
@@ -4104,7 +4432,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_cliente",
                     "default": null,
                     "posicion": 2,
@@ -4112,7 +4440,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_vehiculo",
                     "default": null,
                     "posicion": 3,
@@ -4120,7 +4448,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_solicitud",
                     "default": "now()",
                     "posicion": 4,
@@ -4136,15 +4464,15 @@
                     "tipo_completo": "date"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "hora_deseada",
                     "default": null,
                     "posicion": 6,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(10)"
+                    "tipo_completo": "character varying(10)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_agendada",
                     "default": null,
                     "posicion": 7,
@@ -4168,15 +4496,15 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": "'pendiente'::character varying",
                     "posicion": 10,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "boolean",
+                    "tipo": "bool",
                     "nombre": "es_manual",
                     "default": "false",
                     "posicion": 11,
@@ -4184,7 +4512,7 @@
                     "tipo_completo": "boolean"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "created_at",
                     "default": "now()",
                     "posicion": 12,
@@ -4200,7 +4528,7 @@
                     "tipo_completo": "jsonb"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "horario_seleccionado",
                     "default": null,
                     "posicion": 14,
@@ -4224,7 +4552,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_respuesta_cliente",
                     "default": null,
                     "posicion": 17,
@@ -4251,8 +4579,163 @@
             ]
         },
         {
+            "tabla": "solicitud_reserva_cliente_backup",
+            "indices": [
+            ],
+            "columnas": [
+                {
+                    "tipo": "int4",
+                    "nombre": "id",
+                    "default": null,
+                    "posicion": 1,
+                    "obligatorio": false,
+                    "tipo_completo": "integer"
+                },
+                {
+                    "tipo": "int4",
+                    "nombre": "id_cliente",
+                    "default": null,
+                    "posicion": 2,
+                    "obligatorio": false,
+                    "tipo_completo": "integer"
+                },
+                {
+                    "tipo": "int4",
+                    "nombre": "id_vehiculo",
+                    "default": null,
+                    "posicion": 3,
+                    "obligatorio": false,
+                    "tipo_completo": "integer"
+                },
+                {
+                    "tipo": "timestamp",
+                    "nombre": "fecha_solicitud",
+                    "default": null,
+                    "posicion": 4,
+                    "obligatorio": false,
+                    "tipo_completo": "timestamp without time zone"
+                },
+                {
+                    "tipo": "date",
+                    "nombre": "fecha_deseada",
+                    "default": null,
+                    "posicion": 5,
+                    "obligatorio": false,
+                    "tipo_completo": "date"
+                },
+                {
+                    "tipo": "varchar",
+                    "nombre": "hora_deseada",
+                    "default": null,
+                    "posicion": 6,
+                    "obligatorio": false,
+                    "tipo_completo": "character varying(10)"
+                },
+                {
+                    "tipo": "timestamp",
+                    "nombre": "fecha_agendada",
+                    "default": null,
+                    "posicion": 7,
+                    "obligatorio": false,
+                    "tipo_completo": "timestamp without time zone"
+                },
+                {
+                    "tipo": "text",
+                    "nombre": "descripcion_problema",
+                    "default": null,
+                    "posicion": 8,
+                    "obligatorio": false,
+                    "tipo_completo": "text"
+                },
+                {
+                    "tipo": "text",
+                    "nombre": "mensaje_adicional",
+                    "default": null,
+                    "posicion": 9,
+                    "obligatorio": false,
+                    "tipo_completo": "text"
+                },
+                {
+                    "tipo": "varchar",
+                    "nombre": "estado",
+                    "default": null,
+                    "posicion": 10,
+                    "obligatorio": false,
+                    "tipo_completo": "character varying(50)"
+                },
+                {
+                    "tipo": "bool",
+                    "nombre": "es_manual",
+                    "default": null,
+                    "posicion": 11,
+                    "obligatorio": false,
+                    "tipo_completo": "boolean"
+                },
+                {
+                    "tipo": "timestamp",
+                    "nombre": "created_at",
+                    "default": null,
+                    "posicion": 12,
+                    "obligatorio": false,
+                    "tipo_completo": "timestamp without time zone"
+                },
+                {
+                    "tipo": "jsonb",
+                    "nombre": "horarios_propuestos",
+                    "default": null,
+                    "posicion": 13,
+                    "obligatorio": false,
+                    "tipo_completo": "jsonb"
+                },
+                {
+                    "tipo": "timestamp",
+                    "nombre": "horario_seleccionado",
+                    "default": null,
+                    "posicion": 14,
+                    "obligatorio": false,
+                    "tipo_completo": "timestamp without time zone"
+                },
+                {
+                    "tipo": "text",
+                    "nombre": "respuesta_cliente",
+                    "default": null,
+                    "posicion": 15,
+                    "obligatorio": false,
+                    "tipo_completo": "text"
+                },
+                {
+                    "tipo": "text",
+                    "nombre": "respuesta_comentario",
+                    "default": null,
+                    "posicion": 16,
+                    "obligatorio": false,
+                    "tipo_completo": "text"
+                },
+                {
+                    "tipo": "timestamp",
+                    "nombre": "fecha_respuesta_cliente",
+                    "default": null,
+                    "posicion": 17,
+                    "obligatorio": false,
+                    "tipo_completo": "timestamp without time zone"
+                }
+            ],
+            "clave_primaria": [
+            ],
+            "claves_foraneas": [
+            ]
+        },
+        {
             "tabla": "solicitudregistropersonal",
             "indices": [
+                {
+                    "nombre": "idx_solicitud_documento",
+                    "definicion": "CREATE INDEX idx_solicitud_documento ON public.solicitudregistropersonal USING btree (numero_documento)"
+                },
+                {
+                    "nombre": "idx_solicitud_email",
+                    "definicion": "CREATE INDEX idx_solicitud_email ON public.solicitudregistropersonal USING btree (email)"
+                },
                 {
                     "nombre": "solicitudregistropersonal_email_key",
                     "definicion": "CREATE UNIQUE INDEX solicitudregistropersonal_email_key ON public.solicitudregistropersonal USING btree (email)"
@@ -4268,7 +4751,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('solicitudregistropersonal_id_seq'::regclass)",
                     "posicion": 1,
@@ -4276,36 +4759,36 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "nombre",
                     "default": null,
                     "posicion": 2,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(200)"
+                    "tipo_completo": "character varying(200)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "email",
                     "default": null,
                     "posicion": 3,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(255)"
+                    "tipo_completo": "character varying(255)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "numero_documento",
                     "default": null,
                     "posicion": 4,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "telefono",
                     "default": null,
                     "posicion": 5,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
                     "tipo": "text",
@@ -4316,7 +4799,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_rol_solicitado",
                     "default": null,
                     "posicion": 7,
@@ -4324,15 +4807,15 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "estado",
                     "default": "'pendiente'::character varying",
                     "posicion": 8,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_solicitud",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 9,
@@ -4340,7 +4823,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_respuesta",
                     "default": null,
                     "posicion": 10,
@@ -4348,7 +4831,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_admin_responde",
                     "default": null,
                     "posicion": 11,
@@ -4364,20 +4847,20 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "token_aprobacion",
                     "default": null,
                     "posicion": 13,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "contrasenia_temporal",
                     "default": null,
                     "posicion": 14,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(255)"
+                    "tipo_completo": "character varying(255)"
                 }
             ],
             "clave_primaria": [
@@ -4412,7 +4895,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('transaccionfinanciera_id_seq'::regclass)",
                     "posicion": 1,
@@ -4420,7 +4903,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -4428,7 +4911,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_compra",
                     "default": null,
                     "posicion": 3,
@@ -4436,7 +4919,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_usuario_registra",
                     "default": null,
                     "posicion": 4,
@@ -4444,12 +4927,12 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "tipo",
                     "default": null,
                     "posicion": 5,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(50)"
+                    "tipo_completo": "character varying(50)"
                 },
                 {
                     "tipo": "numeric",
@@ -4468,7 +4951,7 @@
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_hora",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 8,
@@ -4510,7 +4993,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('usorepuesto_id_seq'::regclass)",
                     "posicion": 1,
@@ -4518,7 +5001,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_orden_trabajo",
                     "default": null,
                     "posicion": 2,
@@ -4526,7 +5009,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_repuesto",
                     "default": null,
                     "posicion": 3,
@@ -4534,7 +5017,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "cantidad",
                     "default": null,
                     "posicion": 4,
@@ -4542,7 +5025,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_uso",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 5,
@@ -4594,7 +5077,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('usuario_id_seq'::regclass)",
                     "posicion": 1,
@@ -4602,74 +5085,74 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "nombre",
                     "default": null,
-                    "posicion": 2,
-                    "obligatorio": true,
-                    "tipo_completo": "varchar(200)"
-                },
-                {
-                    "tipo": "character varying",
-                    "nombre": "contacto",
-                    "default": null,
                     "posicion": 3,
-                    "obligatorio": false,
-                    "tipo_completo": "varchar(100)"
+                    "obligatorio": true,
+                    "tipo_completo": "character varying(200)"
                 },
                 {
-                    "tipo": "character varying",
-                    "nombre": "ubicacion",
+                    "tipo": "text",
+                    "nombre": "contacto",
                     "default": null,
                     "posicion": 4,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(255)"
+                    "tipo_completo": "text"
                 },
                 {
-                    "tipo": "character varying",
-                    "nombre": "contrasenia",
+                    "tipo": "varchar",
+                    "nombre": "ubicacion",
                     "default": null,
                     "posicion": 5,
-                    "obligatorio": true,
-                    "tipo_completo": "varchar(255)"
+                    "obligatorio": false,
+                    "tipo_completo": "character varying(255)"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "varchar",
+                    "nombre": "contrasenia",
+                    "default": null,
+                    "posicion": 6,
+                    "obligatorio": true,
+                    "tipo_completo": "character varying(255)"
+                },
+                {
+                    "tipo": "timestamp",
                     "nombre": "fecha_registro",
                     "default": "CURRENT_TIMESTAMP",
-                    "posicion": 6,
+                    "posicion": 7,
                     "obligatorio": false,
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "numero_documento",
-                    "default": null,
-                    "posicion": 7,
-                    "obligatorio": false,
-                    "tipo_completo": "varchar(50)"
-                },
-                {
-                    "tipo": "character varying",
-                    "nombre": "email",
                     "default": null,
                     "posicion": 8,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(255)"
+                    "tipo_completo": "character varying(50)"
+                },
+                {
+                    "tipo": "varchar",
+                    "nombre": "email",
+                    "default": null,
+                    "posicion": 9,
+                    "obligatorio": false,
+                    "tipo_completo": "character varying(255)"
                 },
                 {
                     "tipo": "text",
                     "nombre": "avatar_url",
                     "default": null,
-                    "posicion": 9,
+                    "posicion": 10,
                     "obligatorio": false,
                     "tipo_completo": "text"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "rol_principal",
                     "default": null,
-                    "posicion": 10,
+                    "posicion": 11,
                     "obligatorio": false,
                     "tipo_completo": "integer"
                 }
@@ -4690,6 +5173,14 @@
             "tabla": "usuario_rol",
             "indices": [
                 {
+                    "nombre": "idx_usuario_rol_rol",
+                    "definicion": "CREATE INDEX idx_usuario_rol_rol ON public.usuario_rol USING btree (id_rol)"
+                },
+                {
+                    "nombre": "idx_usuario_rol_usuario",
+                    "definicion": "CREATE INDEX idx_usuario_rol_usuario ON public.usuario_rol USING btree (id_usuario)"
+                },
+                {
                     "nombre": "usuario_rol_id_usuario_id_rol_key",
                     "definicion": "CREATE UNIQUE INDEX usuario_rol_id_usuario_id_rol_key ON public.usuario_rol USING btree (id_usuario, id_rol)"
                 },
@@ -4700,7 +5191,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('usuario_rol_id_seq'::regclass)",
                     "posicion": 1,
@@ -4708,7 +5199,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_usuario",
                     "default": null,
                     "posicion": 2,
@@ -4716,7 +5207,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_rol",
                     "default": null,
                     "posicion": 3,
@@ -4724,7 +5215,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "timestamp without time zone",
+                    "tipo": "timestamp",
                     "nombre": "fecha_asignacion",
                     "default": "CURRENT_TIMESTAMP",
                     "posicion": 4,
@@ -4732,7 +5223,7 @@
                     "tipo_completo": "timestamp without time zone"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "asignado_por",
                     "default": null,
                     "posicion": 5,
@@ -4786,7 +5277,7 @@
             ],
             "columnas": [
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id",
                     "default": "nextval('vehiculo_id_seq'::regclass)",
                     "posicion": 1,
@@ -4794,7 +5285,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "id_cliente",
                     "default": null,
                     "posicion": 2,
@@ -4802,31 +5293,31 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "placa",
                     "default": null,
                     "posicion": 3,
                     "obligatorio": true,
-                    "tipo_completo": "varchar(20)"
+                    "tipo_completo": "character varying(20)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "marca",
                     "default": null,
                     "posicion": 4,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 },
                 {
-                    "tipo": "character varying",
+                    "tipo": "varchar",
                     "nombre": "modelo",
                     "default": null,
                     "posicion": 5,
                     "obligatorio": false,
-                    "tipo_completo": "varchar(100)"
+                    "tipo_completo": "character varying(100)"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "anio",
                     "default": null,
                     "posicion": 6,
@@ -4834,7 +5325,7 @@
                     "tipo_completo": "integer"
                 },
                 {
-                    "tipo": "integer",
+                    "tipo": "int4",
                     "nombre": "kilometraje",
                     "default": null,
                     "posicion": 7,

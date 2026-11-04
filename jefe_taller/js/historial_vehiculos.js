@@ -1,6 +1,7 @@
 // =====================================================
 // HISTORIAL DE VEHÍCULOS - JEFE TALLER
-// VERSIÓN FULL - CON PDF MULTI-PÁGINA Y CICLO COMPLETO
+// VERSIÓN FULL - PDF MULTI-PÁGINA + CICLO COMPLETO
+// FIX: técnicos robustos + btn-volver + logs debug
 // =====================================================
 
 // =====================================================
@@ -23,7 +24,7 @@ let userInfo = null;
 let ordenActualDetalle = null;
 let descargandoPDF = false;
 
-// Cache de imágenes base64 para no pedirlas dos veces
+// Cache de imágenes base64 (evita pedirlas 2 veces al abrir modal + generar PDF)
 const imageCache = new Map();
 
 // =====================================================
@@ -113,6 +114,8 @@ async function cargarUltimasOrdenes() {
         if (!response.ok) throw new Error(`Error HTTP ${response.status}`);
 
         const data = await response.json();
+        console.log('📋 Respuesta últimas órdenes:', data);
+
         if (data.success) {
             mostrarUltimasOrdenes(data.ordenes || [], data.resumen || {});
         } else {
@@ -126,11 +129,35 @@ async function cargarUltimasOrdenes() {
 }
 
 // =====================================================
+// HELPER: FORMATEAR TÉCNICOS
+// =====================================================
+function formatearTecnicos(tecnicos) {
+    if (!tecnicos || !Array.isArray(tecnicos) || tecnicos.length === 0) {
+        return 'Sin asignar';
+    }
+    const nombres = tecnicos
+        .map(t => {
+            if (!t) return null;
+            if (typeof t === 'string') return t.trim();
+            return (t.nombre || '').trim();
+        })
+        .filter(n => n && n.length > 0);
+    return nombres.length > 0 ? nombres.join(', ') : 'Sin asignar';
+}
+
+// =====================================================
 // MOSTRAR ÚLTIMAS ÓRDENES
 // =====================================================
 function mostrarUltimasOrdenes(ordenes, resumen) {
     const container = document.getElementById('resultadosContainer');
     if (!container) return;
+
+    // 🔍 DEBUG
+    console.log('📋 Órdenes recibidas:', ordenes.length);
+    if (ordenes.length > 0) {
+        console.log('🔍 Primera orden completa:', JSON.stringify(ordenes[0], null, 2));
+        console.log('🔧 Técnicos primera orden:', ordenes[0].tecnicos);
+    }
 
     if (!ordenes || ordenes.length === 0) {
         container.innerHTML = `
@@ -168,15 +195,16 @@ function mostrarUltimasOrdenes(ordenes, resumen) {
         const estadoClass = getEstadoClass(orden.estado_global);
         const estadoText = getEstadoText(orden.estado_global);
         const fechaIngreso = formatFecha(orden.fecha_ingreso);
+
         const marca = orden.marca || '';
         const modelo = orden.modelo || '';
         const placa = orden.placa || 'N/A';
         const clienteNombre = orden.cliente_nombre || 'Cliente no registrado';
         const vehiculoDisplay = `${marca} ${modelo}`.trim();
         const vehiculoConPlaca = vehiculoDisplay ? `${vehiculoDisplay} (${placa})` : placa;
-        const tecnicosNombres = orden.tecnicos && orden.tecnicos.length > 0
-            ? orden.tecnicos.map(t => t.nombre).join(', ')
-            : 'Sin asignar';
+
+        // 🔧 TÉCNICOS: usar helper robusto
+        const tecnicosNombres = formatearTecnicos(orden.tecnicos);
 
         html += `
             <div class="orden-historial-card">
@@ -247,6 +275,8 @@ async function buscarHistorial() {
         if (!response.ok) throw new Error('Error al buscar');
 
         const data = await response.json();
+        console.log('📋 Respuesta búsqueda:', data);
+
         if (data.success) {
             if (data.vehiculo) mostrarHistorialVehiculo(data);
             else mostrarSinResultados(container, `No se encontró el vehículo con placa ${placa}`);
@@ -269,8 +299,8 @@ function mostrarHistorialVehiculo(data) {
     const resumen = data.resumen || {};
 
     let html = `
-        <div style="margin-bottom: 1rem;">
-            <button class="btn-limpiar" onclick="cargarUltimasOrdenes()">
+        <div class="historial-back-row">
+            <button class="btn-volver" onclick="cargarUltimasOrdenes()">
                 <i class="fas fa-arrow-left"></i> Ver últimas órdenes
             </button>
         </div>
@@ -315,6 +345,7 @@ function mostrarHistorialVehiculo(data) {
             const estadoClass = getEstadoClass(orden.estado_global);
             const estadoText = getEstadoText(orden.estado_global);
             const fechaIngreso = formatFecha(orden.fecha_ingreso);
+            const tecnicosNombres = formatearTecnicos(orden.tecnicos);
 
             html += `
                 <div class="orden-historial-card">
@@ -336,7 +367,7 @@ function mostrarHistorialVehiculo(data) {
                         </div>
                         <div class="orden-info-item">
                             <span class="orden-info-label">Técnicos</span>
-                            <span class="orden-info-value">${orden.tecnicos?.map(t => escapeHtml(t.nombre)).join(', ') || 'Sin asignar'}</span>
+                            <span class="orden-info-value">${escapeHtml(tecnicosNombres)}</span>
                         </div>
                     </div>
                     <div class="orden-card-footer">
@@ -369,7 +400,8 @@ window.verDetalleCompletoOrden = async function (idOrden) {
 
     try {
         modal.classList.add('show');
-        // Resetear tabs a la primera
+
+        // Resetear a la primera tab
         document.querySelectorAll('.modal-tab').forEach((t, i) => {
             t.classList.toggle('active', i === 0);
         });
@@ -377,7 +409,7 @@ window.verDetalleCompletoOrden = async function (idOrden) {
             c.classList.toggle('active', i === 0);
         });
 
-        // Mostrar loading en cada tab
+        // Loading en cada tab
         ['clienteVehiculoContent', 'recepcionContent', 'diagnosticosContent', 'serviciosContent', 'timelineContent'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.innerHTML = `<div style="text-align:center;padding:30px"><i class="fas fa-spinner fa-spin" style="font-size:28px;color:#C1121F;"></i><p style="margin-top:10px;color:#8E8E93">Cargando...</p></div>`;
@@ -410,7 +442,6 @@ window.verDetalleCompletoOrden = async function (idOrden) {
 // CARGAR DETALLE EN TABS
 // =====================================================
 function cargarDetalleEnTabs(detalle) {
-    // Actualizar título del modal
     const modalTitle = document.querySelector('#modalDetalleOrden .modal-header h2');
     if (modalTitle) {
         modalTitle.innerHTML = `<i class="fas fa-clipboard-list"></i> Orden <span style="color:#C1121F">${escapeHtml(detalle.codigo_unico)}</span>`;
@@ -477,6 +508,39 @@ function renderTabClienteVehiculo(detalle) {
         `;
     }
 
+    // Técnicos asignados
+    let tecnicosHtml = '';
+    if (detalle.tecnicos_asignados?.length) {
+        tecnicosHtml = `
+            <div class="detalle-seccion">
+                <h4><i class="fas fa-users"></i> Técnicos Asignados (${detalle.tecnicos_asignados.length})</h4>
+                <div>
+                    ${detalle.tecnicos_asignados.map(t => `
+                        <div class="tecnico-badge">
+                            <i class="fas fa-wrench"></i>
+                            ${escapeHtml(t.nombre || 'Técnico')}
+                            <small>(${escapeHtml(t.tipo_asignacion || 'N/A')})</small>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>`;
+    }
+
+    // Planificación
+    let planificacionHtml = '';
+    if (detalle.planificacion) {
+        planificacionHtml = `
+            <div class="detalle-seccion">
+                <h4><i class="fas fa-warehouse"></i> Planificación</h4>
+                <div class="detalle-grid">
+                    <div class="detalle-item"><span class="detalle-label">Bahía</span><span class="detalle-value">${detalle.planificacion.bahia || 'N/A'}</span></div>
+                    <div class="detalle-item"><span class="detalle-label">Horas Estimadas</span><span class="detalle-value">${detalle.planificacion.horas_estimadas || 'N/A'}</span></div>
+                    <div class="detalle-item"><span class="detalle-label">Inicio Estimado</span><span class="detalle-value">${formatFecha(detalle.planificacion.inicio_estimado)}</span></div>
+                    <div class="detalle-item"><span class="detalle-label">Fin Estimado</span><span class="detalle-value">${formatFecha(detalle.planificacion.fin_estimado)}</span></div>
+                </div>
+            </div>`;
+    }
+
     const html = `
         <div class="detalle-seccion">
             <h4><i class="fas fa-info-circle"></i> Información General</h4>
@@ -502,28 +566,8 @@ function renderTabClienteVehiculo(detalle) {
             </div>
         </div>
 
-        ${detalle.tecnicos_asignados?.length ? `
-            <div class="detalle-seccion">
-                <h4><i class="fas fa-users"></i> Técnicos Asignados</h4>
-                ${detalle.tecnicos_asignados.map(t => `
-                    <div class="tecnico-badge" style="display:inline-flex;margin:4px 4px 0 0;padding:6px 12px;background:rgba(193,18,31,0.15);color:#C1121F;border-radius:20px;font-size:12px">
-                        <i class="fas fa-wrench" style="margin-right:6px"></i>${escapeHtml(t.nombre || 'Técnico')} <small style="margin-left:6px;opacity:0.7">(${escapeHtml(t.tipo_asignacion || 'N/A')})</small>
-                    </div>
-                `).join('')}
-            </div>
-        ` : ''}
-
-        ${detalle.planificacion ? `
-            <div class="detalle-seccion">
-                <h4><i class="fas fa-warehouse"></i> Planificación</h4>
-                <div class="detalle-grid">
-                    <div class="detalle-item"><span class="detalle-label">Bahía</span><span class="detalle-value">${detalle.planificacion.bahia || 'N/A'}</span></div>
-                    <div class="detalle-item"><span class="detalle-label">Horas Estimadas</span><span class="detalle-value">${detalle.planificacion.horas_estimadas || 'N/A'}</span></div>
-                    <div class="detalle-item"><span class="detalle-label">Inicio Estimado</span><span class="detalle-value">${formatFecha(detalle.planificacion.inicio_estimado)}</span></div>
-                    <div class="detalle-item"><span class="detalle-label">Fin Estimado</span><span class="detalle-value">${formatFecha(detalle.planificacion.fin_estimado)}</span></div>
-                </div>
-            </div>
-        ` : ''}
+        ${tecnicosHtml}
+        ${planificacionHtml}
     `;
 
     const el = document.getElementById('clienteVehiculoContent');
@@ -578,7 +622,6 @@ function renderTabRecepcion(detalle) {
 function renderTabDiagnosticos(detalle) {
     let html = '';
 
-    // Diagnóstico inicial
     if (detalle.diagnostico_inicial) {
         const d = detalle.diagnostico_inicial;
         html += `
@@ -590,7 +633,6 @@ function renderTabDiagnosticos(detalle) {
             </div>`;
     }
 
-    // Instrucciones directas de la orden
     if (detalle.instrucciones_tecnico) {
         html += `
             <div class="detalle-seccion" style="border-left:3px solid #F59E0B">
@@ -600,7 +642,6 @@ function renderTabDiagnosticos(detalle) {
             </div>`;
     }
 
-    // Historial de instrucciones
     if (detalle.instrucciones?.length) {
         html += `
             <div class="detalle-seccion">
@@ -618,7 +659,6 @@ function renderTabDiagnosticos(detalle) {
             </div>`;
     }
 
-    // Diagnósticos técnicos
     if (detalle.diagnosticos_tecnicos?.length) {
         const dts = detalle.diagnosticos_tecnicos.filter(d => !d.es_borrador);
         if (dts.length) {
@@ -663,7 +703,6 @@ function renderTabDiagnosticos(detalle) {
 function renderTabServiciosAvances(detalle) {
     let html = '';
 
-    // Cotización
     if (detalle.cotizacion) {
         const c = detalle.cotizacion;
         html += `
@@ -679,7 +718,6 @@ function renderTabServiciosAvances(detalle) {
             </div>`;
     }
 
-    // Servicios
     if (detalle.servicios?.length) {
         html += `
             <div class="detalle-seccion">
@@ -699,7 +737,6 @@ function renderTabServiciosAvances(detalle) {
             </div>`;
     }
 
-    // Avances
     if (detalle.avances?.length) {
         html += `<div class="detalle-seccion"><h4><i class="fas fa-tasks"></i> Avances del Trabajo</h4>`;
         detalle.avances.forEach(av => {
@@ -721,7 +758,6 @@ function renderTabServiciosAvances(detalle) {
         html += `</div>`;
     }
 
-    // Control de calidad
     if (detalle.control_calidad) {
         const cc = detalle.control_calidad;
         html += `
@@ -750,20 +786,21 @@ function renderTabTimeline(detalle) {
     if (detalle.seguimiento?.length) {
         html += `
             <div class="detalle-seccion">
-                <h4><i class="fas fa-history"></i> Historial de Estados</h4>
+                <h4><i class="fas fa-history"></i> Historial de Estados (${detalle.seguimiento.length})</h4>
                 <div class="timeline">
-                    ${detalle.seguimiento.map((s, i) => `
-                        <div style="position:relative;padding:12px 12px 12px 32px;border-left:2px solid ${i === detalle.seguimiento.length - 1 ? '#C1121F' : '#2C2C2E'};margin-left:8px;margin-bottom:8px">
-                            <div style="position:absolute;left:-8px;top:16px;width:14px;height:14px;background:${i === detalle.seguimiento.length - 1 ? '#C1121F' : '#2C2C2E'};border-radius:50%;border:2px solid var(--bg-card)"></div>
-                            <strong style="color:${i === detalle.seguimiento.length - 1 ? '#C1121F' : 'white'}">${escapeHtml(s.estado || 'N/A')}</strong>
-                            <div style="color:#8E8E93;font-size:12px;margin-top:2px">${formatFecha(s.fecha_hora)}</div>
-                            ${s.motivo_pausa ? `<div style="color:#F59E0B;font-size:12px;margin-top:4px"><i class="fas fa-pause"></i> ${escapeHtml(s.motivo_pausa)}</div>` : ''}
+                    ${detalle.seguimiento.map(s => `
+                        <div class="timeline-item">
+                            <strong>${escapeHtml(s.estado || 'N/A')}</strong>
+                            <div class="timeline-fecha">
+                                <i class="fas fa-clock"></i> ${formatFecha(s.fecha_hora)}
+                            </div>
+                            ${s.motivo_pausa ? `<div class="timeline-motivo"><i class="fas fa-pause-circle"></i> ${escapeHtml(s.motivo_pausa)}</div>` : ''}
                         </div>
                     `).join('')}
                 </div>
             </div>`;
     } else {
-        html = '<div class="empty-state"><p>No hay historial de estados</p></div>';
+        html = '<div class="empty-state"><i class="fas fa-stream"></i><p>No hay historial de estados</p></div>';
     }
 
     const el = document.getElementById('timelineContent');
@@ -835,7 +872,6 @@ async function cargarImagenProxy(url, contenedorId) {
         return;
     }
 
-    // Cache hit
     if (imageCache.has(url)) {
         contenedor.innerHTML = `<img src="${imageCache.get(url)}" style="width:100%;height:100%;object-fit:cover;display:block">`;
         return;
@@ -906,14 +942,15 @@ async function descargarPDFHistorial() {
             await new Promise((resolve, reject) => {
                 const s = document.createElement('script');
                 s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-                s.onload = resolve; s.onerror = reject;
+                s.onload = resolve;
+                s.onerror = reject;
                 document.head.appendChild(s);
             });
         }
         const { jsPDF } = window.jspdf || jspdf;
         const detalle = ordenActualDetalle;
 
-        // 2. Convertir fotos a base64 (usa cache si ya están)
+        // 2. Convertir fotos a base64 (usa cache)
         const fotosOb = detalle.fotos?.obligatorias || {};
         const fotosOp = detalle.fotos?.opcionales || {};
         const fotosObBase64 = {};
@@ -1040,7 +1077,7 @@ async function descargarPDFHistorial() {
             });
         };
 
-        // ---- PORTADA / INFO ----
+        // ---- PORTADA ----
         dibujarHeader();
         y = MARGEN + 20;
 
@@ -1054,7 +1091,6 @@ async function descargarPDFHistorial() {
         pdf.text(`# ${detalle.codigo_unico}`, PAGE_W / 2, y, { align: 'center' });
         y += 8;
 
-        // Info general
         pdf.setFillColor(...COLOR_FONDO);
         pdf.rect(MARGEN, y, ANCHO, 8, 'F');
         pdf.setFontSize(8);
@@ -1063,7 +1099,6 @@ async function descargarPDFHistorial() {
         pdf.text(`Estado: ${getEstadoText(detalle.estado_global)}`, PAGE_W - MARGEN - 3, y + 5, { align: 'right' });
         y += 12;
 
-        // Cliente + Vehículo
         const c = detalle.cliente || {};
         const anchoMitad = (ANCHO - 4) / 2;
         const esProp = c.es_propietario !== false;
@@ -1103,7 +1138,7 @@ async function descargarPDFHistorial() {
             y += alto + 5;
         }
 
-        // Fotos obligatorias (4+3)
+        // Fotos obligatorias
         if (Object.keys(fotosObBase64).length) {
             seccion(`FOTOS OBLIGATORIAS (${Object.keys(fotosObBase64).length}/7)`);
             const gap = 3;
@@ -1111,7 +1146,6 @@ async function descargarPDFHistorial() {
             const hF = wF * 0.85;
             const items = Object.entries(fotosObBase64);
 
-            // Fila 1 (4)
             nuevaPaginaSi(hF + 10);
             for (let i = 0; i < 4; i++) {
                 const item = items[i];
@@ -1120,7 +1154,6 @@ async function descargarPDFHistorial() {
             }
             y += hF + 8;
 
-            // Fila 2 (3 centradas)
             if (items.length > 4) {
                 nuevaPaginaSi(hF + 10);
                 const wTotal = wF * 3 + gap * 2;
@@ -1134,7 +1167,7 @@ async function descargarPDFHistorial() {
             }
         }
 
-        // Fotos opcionales (3 por fila)
+        // Fotos opcionales
         if (Object.keys(fotosOpBase64).length) {
             pdf.addPage();
             dibujarHeader();
@@ -1155,7 +1188,7 @@ async function descargarPDFHistorial() {
             }
         }
 
-        // ---- DIAGNÓSTICO ----
+        // ---- DIAGNÓSTICOS ----
         if (detalle.diagnostico_inicial || detalle.diagnosticos_tecnicos?.length) {
             pdf.addPage();
             dibujarHeader();
@@ -1253,7 +1286,7 @@ async function descargarPDFHistorial() {
                 nuevaPaginaSi(8);
                 const desc = String(s.descripcion || '').substring(0, 70);
                 pdf.text(desc, MARGEN + 3, y);
-                pdf.text(s.aprobado ? '✓' : '○', PAGE_W - MARGEN - 45, y, { align: 'center' });
+                pdf.text(s.aprobado ? 'SI' : 'NO', PAGE_W - MARGEN - 45, y, { align: 'center' });
                 pdf.text(`Bs. ${s.precio.toFixed(2)}`, PAGE_W - MARGEN - 3, y, { align: 'right' });
                 y += 5;
             });
@@ -1295,7 +1328,7 @@ async function descargarPDFHistorial() {
                 if (av.fecha_aprobacion) {
                     pdf.setTextColor(16, 185, 129);
                     pdf.setFont('helvetica', 'bold');
-                    pdf.text(`✓ Aprobado por ${av.aprobado_por || ''} — ${formatFecha(av.fecha_aprobacion)}`, MARGEN, y);
+                    pdf.text(`OK Aprobado por ${av.aprobado_por || ''} — ${formatFecha(av.fecha_aprobacion)}`, MARGEN, y);
                     y += 5;
                 }
                 y += 2;
@@ -1390,7 +1423,7 @@ async function descargarPDFHistorial() {
 
         mostrarNotificacion('✅ PDF descargado correctamente', 'success');
 
-        // 5. Intentar subir a Drive (opcional)
+        // 5. Intentar subir a Drive (opcional, no rompe si falla)
         try {
             const reader = new FileReader();
             const base64 = await new Promise(resolve => {
@@ -1398,12 +1431,13 @@ async function descargarPDFHistorial() {
                 reader.readAsDataURL(blob);
             });
             const token = localStorage.getItem('furia_token');
-            await fetch(`${window.API_BASE_URL}/api/jefe-taller/subir-pdf-historial`, {
+            const subida = await fetch(`${window.API_BASE_URL}/api/jefe-taller/subir-pdf-historial`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ pdf_base64: base64, id_orden: detalle.id, codigo_unico: detalle.codigo_unico })
             });
-            console.log('✅ PDF subido a Drive');
+            if (subida.ok) console.log('✅ PDF subido a Drive');
+            else console.warn('⚠️ No se pudo subir a Drive (endpoint no existe o falló)');
         } catch (e) {
             console.warn('⚠️ No se pudo subir a Drive:', e);
         }
@@ -1418,7 +1452,7 @@ async function descargarPDFHistorial() {
 }
 
 // =====================================================
-// CACHE/CONVERSIÓN BASE64
+// CACHE / CONVERSIÓN BASE64
 // =====================================================
 async function getBase64(url) {
     if (!url || url === 'null' || url === 'undefined') return null;
@@ -1442,15 +1476,19 @@ async function getBase64(url) {
 }
 
 // =====================================================
-// HELPERS
+// HELPERS DE ESTADO Y FECHA
 // =====================================================
 function getEstadoClass(estado) {
     if (!estado) return '';
     const map = {
-        'Entregado': 'Entregado', 'Finalizado': 'Finalizado',
-        'EnReparacion': 'EnProceso', 'EnDiagnostico': 'EnDiagnostico',
-        'EnRecepcion': 'EnRecepcion', 'EnPausa': 'EnPausa',
-        'ReparacionCompletada': 'ReparacionCompletada'
+        'Entregado': 'Entregado',
+        'Finalizado': 'Finalizado',
+        'EnReparacion': 'EnReparacion',
+        'EnDiagnostico': 'EnDiagnostico',
+        'EnRecepcion': 'EnRecepcion',
+        'EnPausa': 'EnPausa',
+        'ReparacionCompletada': 'ReparacionCompletada',
+        'EnProceso': 'EnProceso'
     };
     return map[estado] || '';
 }
@@ -1458,10 +1496,14 @@ function getEstadoClass(estado) {
 function getEstadoText(estado) {
     if (!estado) return 'Desconocido';
     const map = {
-        'Entregado': 'Entregado', 'Finalizado': 'Finalizado',
-        'EnReparacion': 'En Reparación', 'EnDiagnostico': 'En Diagnóstico',
-        'EnRecepcion': 'En Recepción', 'EnPausa': 'En Pausa',
-        'ReparacionCompletada': 'Reparación Completada'
+        'Entregado': 'Entregado',
+        'Finalizado': 'Finalizado',
+        'EnReparacion': 'En Reparación',
+        'EnDiagnostico': 'En Diagnóstico',
+        'EnRecepcion': 'En Recepción',
+        'EnPausa': 'En Pausa',
+        'ReparacionCompletada': 'Reparación Completada',
+        'EnProceso': 'En Proceso'
     };
     return map[estado] || estado;
 }
@@ -1491,30 +1533,57 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// =====================================================
+// LOADING / ERRORES / EMPTY
+// =====================================================
 function mostrarLoading(container, mensaje) {
     container.innerHTML = `<div class="loading-state"><i class="fas fa-spinner fa-spin"></i><p>${escapeHtml(mensaje)}</p></div>`;
 }
 
 function mostrarError(container, mensaje) {
-    container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Error</h3><p>${escapeHtml(mensaje)}</p><button class="btn-buscar" onclick="cargarUltimasOrdenes()" style="margin-top:1rem"><i class="fas fa-sync-alt"></i> Reintentar</button></div>`;
+    container.innerHTML = `
+        <div class="empty-state">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h3>Error</h3>
+            <p>${escapeHtml(mensaje)}</p>
+            <button class="btn-buscar" onclick="cargarUltimasOrdenes()">
+                <i class="fas fa-sync-alt"></i> Reintentar
+            </button>
+        </div>`;
 }
 
 function mostrarSinResultados(container, mensaje) {
-    container.innerHTML = `<div class="empty-state"><i class="fas fa-search"></i><h3>Sin resultados</h3><p>${escapeHtml(mensaje)}</p><button class="btn-buscar" onclick="cargarUltimasOrdenes()" style="margin-top:1rem"><i class="fas fa-history"></i> Ver últimas órdenes</button></div>`;
+    container.innerHTML = `
+        <div class="empty-state">
+            <i class="fas fa-search"></i>
+            <h3>Sin resultados</h3>
+            <p>${escapeHtml(mensaje)}</p>
+            <button class="btn-buscar" onclick="cargarUltimasOrdenes()">
+                <i class="fas fa-history"></i> Ver últimas órdenes
+            </button>
+        </div>`;
 }
 
+// =====================================================
+// TOASTS
+// =====================================================
 function mostrarNotificacion(mensaje, tipo = 'info') {
     document.querySelectorAll('.toast-notification').forEach(t => t.remove());
     const toast = document.createElement('div');
     toast.className = `toast-notification ${tipo}`;
-    const icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
+    const icons = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
+    };
     toast.innerHTML = `<i class="fas ${icons[tipo] || icons.info}"></i><span>${escapeHtml(mensaje)}</span>`;
     document.body.appendChild(toast);
     setTimeout(() => { if (toast.parentNode) toast.remove(); }, 4000);
 }
 
 // =====================================================
-// TABS
+// TABS DEL MODAL
 // =====================================================
 function setupModalTabs() {
     const tabs = document.querySelectorAll('.modal-tab');
@@ -1536,10 +1605,14 @@ function setupModalTabs() {
 function configurarEventListeners() {
     document.getElementById('btnBuscar')?.addEventListener('click', buscarHistorial);
     document.getElementById('btnLimpiar')?.addEventListener('click', () => {
-        document.getElementById('searchPlaca').value = '';
-        document.getElementById('filterEstado').value = '';
-        document.getElementById('fechaDesde').value = '';
-        document.getElementById('fechaHasta').value = '';
+        const sp = document.getElementById('searchPlaca');
+        const fe = document.getElementById('filterEstado');
+        const fd = document.getElementById('fechaDesde');
+        const fh = document.getElementById('fechaHasta');
+        if (sp) sp.value = '';
+        if (fe) fe.value = '';
+        if (fd) fd.value = '';
+        if (fh) fh.value = '';
         cargarUltimasOrdenes();
     });
     document.getElementById('searchPlaca')?.addEventListener('keypress', e => {
@@ -1560,6 +1633,7 @@ window.cerrarModalImagen = function () {
     document.getElementById('modalImagen')?.classList.remove('show');
 };
 
+// Cerrar con ESC
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
         document.getElementById('modalDetalleOrden')?.classList.remove('show');

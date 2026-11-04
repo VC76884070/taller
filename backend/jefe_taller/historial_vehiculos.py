@@ -1,6 +1,7 @@
 # =====================================================
 # HISTORIAL DE VEHÍCULOS - JEFE TALLER
 # VERSIÓN FULL - INCLUYE TODO EL CICLO DE UNA ORDEN
+# CON FIX: técnicos robustos + cache con fallback
 # =====================================================
 
 from flask import Blueprint, request, jsonify
@@ -21,24 +22,31 @@ supabase = config.supabase
 # =====================================================
 
 class _NombreCache:
-    """Cache local para evitar N+1 queries a usuario"""
+    """Cache local para evitar N+1 queries a usuario.
+    Si el usuario no existe o no tiene nombre, devuelve un fallback legible."""
     def __init__(self):
         self._cache = {}
-    
+
     def get(self, uid):
         if not uid:
             return None
         if uid in self._cache:
             return self._cache[uid]
         try:
-            r = supabase.table('usuario').select('nombre').eq('id', uid).execute()
-            nombre = r.data[0]['nombre'] if r.data else None
-            self._cache[uid] = nombre
-            return nombre
+            r = supabase.table('usuario').select('id, nombre').eq('id', uid).execute()
+            if r.data and len(r.data) > 0:
+                nombre = r.data[0].get('nombre')
+                if nombre and str(nombre).strip():
+                    self._cache[uid] = str(nombre).strip()
+                else:
+                    self._cache[uid] = f"Usuario #{uid}"
+            else:
+                self._cache[uid] = f"Usuario #{uid}"
+            return self._cache[uid]
         except Exception as e:
             logger.warning(f"Error obteniendo nombre {uid}: {e}")
-            self._cache[uid] = None
-            return None
+            self._cache[uid] = f"Usuario #{uid}"
+            return self._cache[uid]
 
 
 def _fmt_fecha_iso(fecha):
@@ -70,6 +78,46 @@ def _safe_int(val, default=0):
         return default
 
 
+def _get_tecnicos_por_orden(ordenes_ids, cache):
+    """
+    Devuelve dict { id_orden: [ {nombre, tipo_asignacion} ] }
+    Robusto: no rompe si hay errores, deduplica técnicos y usa fallback de nombre.
+    """
+    tecnicos_map = {}
+    if not ordenes_ids:
+        return tecnicos_map
+
+    try:
+        asignaciones = supabase.table('asignaciontecnico') \
+            .select('id_orden_trabajo, id_tecnico, tipo_asignacion') \
+            .in_('id_orden_trabajo', ordenes_ids) \
+            .execute()
+
+        logger.info(f"🔧 Asignaciones encontradas para {len(ordenes_ids)} órdenes: {len(asignaciones.data or [])}")
+
+        for a in (asignaciones.data or []):
+            oid = a.get('id_orden_trabajo')
+            tid = a.get('id_tecnico')
+            tipo = a.get('tipo_asignacion') or 'diagnostico'
+            if not oid:
+                continue
+            if oid not in tecnicos_map:
+                tecnicos_map[oid] = []
+            if not tid:
+                continue
+            nombre = cache.get(tid)
+            # Evitar duplicados (mismo técnico asignado en varias filas)
+            if nombre and not any(t['nombre'] == nombre for t in tecnicos_map[oid]):
+                tecnicos_map[oid].append({
+                    'nombre': nombre,
+                    'tipo_asignacion': tipo
+                })
+    except Exception as e:
+        logger.error(f"Error obteniendo técnicos: {e}")
+
+    return tecnicos_map
+
+
 # =====================================================
 # FUNCIÓN INTERNA REUTILIZABLE:
 #   Devuelve TODO el detalle de una orden
@@ -81,20 +129,20 @@ def _get_detalle_orden_full(id_orden):
     Retorna dict o None si no existe.
     """
     cache = _NombreCache()
-    
+
     # ---------- 1. ORDEN BASE ----------
     orden_result = supabase.table('ordentrabajo').select('*').eq('id', id_orden).execute()
     if not orden_result.data:
         return None
     orden = orden_result.data[0]
-    
+
     # ---------- 2. VEHÍCULO ----------
     vehiculo = {}
     if orden.get('id_vehiculo'):
         v = supabase.table('vehiculo').select('*').eq('id', orden['id_vehiculo']).execute()
         if v.data:
             vehiculo = v.data[0]
-    
+
     # ---------- 3. CLIENTE ----------
     cliente = {
         'nombre': 'No registrado',
@@ -137,18 +185,18 @@ def _get_detalle_orden_full(id_orden):
                 if u.data:
                     cliente['nombre'] = u.data[0].get('nombre', 'No registrado')
                     cliente['telefono'] = u.data[0].get('contacto', 'No registrado')
-    
+
     # ---------- 4. JEFES ----------
     jefe_operativo_nombre = cache.get(orden.get('id_jefe_operativo'))
     jefe_operativo_2_nombre = cache.get(orden.get('id_jefe_operativo_2'))
     jefe_taller_instrucciones_nombre = cache.get(orden.get('id_jefe_taller_instrucciones'))
-    
+
     # ---------- 5. RECEPCIÓN ----------
     recepcion_data = {}
     r = supabase.table('recepcion').select('*').eq('id_orden_trabajo', id_orden).execute()
     if r.data:
         recepcion_data = r.data[0]
-    
+
     campos_obligatorios = [
         'url_lateral_izquierda', 'url_lateral_derecha',
         'url_foto_frontal', 'url_foto_trasera',
@@ -156,14 +204,14 @@ def _get_detalle_orden_full(id_orden):
         'url_foto_tablero'
     ]
     campos_opcionales = [f'url_opcional{i}' for i in range(1, 11)]
-    
+
     fotos_obligatorias = {c: recepcion_data.get(c) for c in campos_obligatorios if recepcion_data.get(c)}
     fotos_opcionales = {c: recepcion_data.get(c) for c in campos_opcionales if recepcion_data.get(c)}
-    
+
     # ---------- 6. DIAGNÓSTICO INICIAL ----------
     diagnostico_inicial = None
-    di = supabase.table('diagnostigoinicial').select('*')\
-        .eq('id_orden_trabajo', id_orden)\
+    di = supabase.table('diagnostigoinicial').select('*') \
+        .eq('id_orden_trabajo', id_orden) \
         .order('fecha_hora', desc=True).limit(1).execute()
     if di.data:
         d = di.data[0]
@@ -173,28 +221,28 @@ def _get_detalle_orden_full(id_orden):
             'audio_url': d.get('url_grabacion'),
             'jefe_nombre': cache.get(d.get('id_jefe_taller'))
         }
-    
+
     # ---------- 7. DIAGNÓSTICOS TÉCNICOS ----------
     diagnosticos_tecnicos = []
-    dt_result = supabase.table('diagnostico_tecnico').select('*')\
-        .eq('id_orden_trabajo', id_orden)\
+    dt_result = supabase.table('diagnostico_tecnico').select('*') \
+        .eq('id_orden_trabajo', id_orden) \
         .order('fecha_envio', desc=False).execute()
-    
+
     for dt in (dt_result.data or []):
         # Fotos del diagnóstico
         fotos_dt = []
-        f = supabase.table('foto_diagnostico').select('*')\
+        f = supabase.table('foto_diagnostico').select('*') \
             .eq('id_diagnostico_tecnico', dt['id']).execute()
         for foto in (f.data or []):
             fotos_dt.append({
                 'url': foto.get('url_foto'),
                 'descripcion': foto.get('descripcion_tecnico')
             })
-        
+
         # Observaciones del jefe
         obs_list = []
-        o = supabase.table('observaciondiagnostico').select('*')\
-            .eq('id_diagnostico_tecnico', dt['id'])\
+        o = supabase.table('observaciondiagnostico').select('*') \
+            .eq('id_diagnostico_tecnico', dt['id']) \
             .order('fecha_hora', desc=False).execute()
         for obs in (o.data or []):
             obs_list.append({
@@ -204,7 +252,7 @@ def _get_detalle_orden_full(id_orden):
                 'transcripcion': obs.get('transcripcion_obs'),
                 'jefe_nombre': cache.get(obs.get('id_jefe_taller'))
             })
-        
+
         diagnosticos_tecnicos.append({
             'id': dt['id'],
             'version': _safe_int(dt.get('version'), 1),
@@ -218,11 +266,11 @@ def _get_detalle_orden_full(id_orden):
             'fotos': fotos_dt,
             'observaciones': obs_list
         })
-    
+
     # ---------- 8. INSTRUCCIONES DEL JEFE DE TALLER ----------
     instrucciones = []
-    inst_result = supabase.table('instrucciones_tecnico_historial').select('*')\
-        .eq('id_orden_trabajo', id_orden)\
+    inst_result = supabase.table('instrucciones_tecnico_historial').select('*') \
+        .eq('id_orden_trabajo', id_orden) \
         .order('fecha_envio', desc=False).execute()
     for inst in (inst_result.data or []):
         instrucciones.append({
@@ -232,23 +280,33 @@ def _get_detalle_orden_full(id_orden):
             'fecha_leida': _fmt_fecha_iso(inst.get('fecha_leida')),
             'jefe_nombre': cache.get(inst.get('id_jefe_taller'))
         })
-    
+
     # ---------- 9. TÉCNICOS ASIGNADOS ----------
     tecnicos_asignados = []
-    asig_result = supabase.table('asignaciontecnico').select('*')\
-        .eq('id_orden_trabajo', id_orden).execute()
-    for a in (asig_result.data or []):
-        tecnicos_asignados.append({
-            'nombre': cache.get(a.get('id_tecnico')),
-            'tipo_asignacion': a.get('tipo_asignacion'),
-            'fecha_inicio': _fmt_fecha_iso(a.get('fecha_hora_inicio')),
-            'fecha_final': _fmt_fecha_iso(a.get('fecha_hora_final')),
-            'fecha_final_estimada': _fmt_fecha_iso(a.get('fecha_hora_final_estimada'))
-        })
-    
+    try:
+        asig_result = supabase.table('asignaciontecnico').select('*') \
+            .eq('id_orden_trabajo', id_orden).execute()
+        vistos = set()
+        for a in (asig_result.data or []):
+            tid = a.get('id_tecnico')
+            if not tid or tid in vistos:
+                continue
+            vistos.add(tid)
+            nombre = cache.get(tid)
+            tecnicos_asignados.append({
+                'nombre': nombre,
+                'tipo_asignacion': a.get('tipo_asignacion') or 'diagnostico',
+                'fecha_inicio': _fmt_fecha_iso(a.get('fecha_hora_inicio')),
+                'fecha_final': _fmt_fecha_iso(a.get('fecha_hora_final')),
+                'fecha_final_estimada': _fmt_fecha_iso(a.get('fecha_hora_final_estimada'))
+            })
+        logger.info(f"🔧 Orden {id_orden}: {len(tecnicos_asignados)} técnicos asignados")
+    except Exception as e:
+        logger.error(f"Error obteniendo técnicos de orden {id_orden}: {e}")
+
     # ---------- 10. PLANIFICACIÓN ----------
     planificacion = None
-    plan = supabase.table('planificacion').select('*')\
+    plan = supabase.table('planificacion').select('*') \
         .eq('id_orden_trabajo', id_orden).execute()
     if plan.data:
         p = plan.data[0]
@@ -260,13 +318,13 @@ def _get_detalle_orden_full(id_orden):
             'inicio_real': _fmt_fecha_iso(p.get('fecha_hora_inicio_real')),
             'fin_real': _fmt_fecha_iso(p.get('fecha_hora_fin_real'))
         }
-    
+
     # ---------- 11. AVANCES DEL TRABAJO ----------
     avances = []
-    av_result = supabase.table('avance_trabajo').select('*')\
-        .eq('id_orden_trabajo', id_orden)\
+    av_result = supabase.table('avance_trabajo').select('*') \
+        .eq('id_orden_trabajo', id_orden) \
         .order('numero_avance', desc=False).execute()
-    
+
     for av in (av_result.data or []):
         fotos_av = []
         # Fotos desde jsonb
@@ -281,14 +339,17 @@ def _get_detalle_orden_full(id_orden):
                         fotos_av.append(f_.get('url', ''))
         except Exception:
             pass
-        
+
         # Fotos desde tabla foto_avance
-        fa = supabase.table('foto_avance').select('*')\
-            .eq('id_avance', av['id']).execute()
-        for f_ in (fa.data or []):
-            if f_.get('url_foto'):
-                fotos_av.append(f_.get('url_foto'))
-        
+        try:
+            fa = supabase.table('foto_avance').select('*') \
+                .eq('id_avance', av['id']).execute()
+            for f_ in (fa.data or []):
+                if f_.get('url_foto'):
+                    fotos_av.append(f_.get('url_foto'))
+        except Exception:
+            pass
+
         avances.append({
             'numero_avance': _safe_int(av.get('numero_avance')),
             'titulo': av.get('titulo'),
@@ -301,18 +362,18 @@ def _get_detalle_orden_full(id_orden):
             'tecnico_nombre': cache.get(av.get('id_tecnico')),
             'fotos': [f_ for f_ in fotos_av if f_]
         })
-    
+
     # ---------- 12. COTIZACIÓN + SERVICIOS ----------
     cotizacion = None
     servicios = []
     total_servicios = 0.0
-    cot_result = supabase.table('cotizacion').select('*')\
-        .eq('id_orden_trabajo', id_orden)\
+    cot_result = supabase.table('cotizacion').select('*') \
+        .eq('id_orden_trabajo', id_orden) \
         .order('fecha_generacion', desc=True).limit(1).execute()
-    
+
     if cot_result.data:
         cot = cot_result.data[0]
-        det_result = supabase.table('cotizaciondetalle').select('*')\
+        det_result = supabase.table('cotizaciondetalle').select('*') \
             .eq('id_cotizacion', cot['id']).execute()
         for d in (det_result.data or []):
             precio = _safe_float(d.get('precio'), 0.0)
@@ -322,7 +383,7 @@ def _get_detalle_orden_full(id_orden):
                 'aprobado': d.get('aprobado_por_cliente', False)
             })
             total_servicios += precio
-        
+
         cotizacion = {
             'id': cot['id'],
             'estado': cot.get('estado'),
@@ -336,11 +397,11 @@ def _get_detalle_orden_full(id_orden):
             'fecha_rechazo': _fmt_fecha_iso(cot.get('fecha_rechazo')),
             'archivo_url': cot.get('archivo_url')
         }
-    
+
     # ---------- 13. SEGUIMIENTO (TIMELINE) ----------
     seguimiento = []
-    seg_result = supabase.table('seguimientoorden').select('*')\
-        .eq('id_orden_trabajo', id_orden)\
+    seg_result = supabase.table('seguimientoorden').select('*') \
+        .eq('id_orden_trabajo', id_orden) \
         .order('fecha_hora_cambio', desc=False).execute()
     for s in (seg_result.data or []):
         seguimiento.append({
@@ -348,7 +409,7 @@ def _get_detalle_orden_full(id_orden):
             'motivo_pausa': s.get('motivo_pausa'),
             'fecha_hora': _fmt_fecha_iso(s.get('fecha_hora_cambio'))
         })
-    
+
     # ---------- 14. CONTROL DE CALIDAD ----------
     control_calidad = None
     avances_aprobados = [
@@ -362,7 +423,7 @@ def _get_detalle_orden_full(id_orden):
             'fecha_aprobacion': ultimo.get('fecha_aprobacion'),
             'comentario': ultimo.get('comentario_revision')
         }
-    
+
     # ---------- RESULTADO FINAL ----------
     return {
         # Orden
@@ -376,29 +437,29 @@ def _get_detalle_orden_full(id_orden):
         'fecha_cotizacion_aceptada': _fmt_fecha_iso(orden.get('fecha_cotizacion_aceptada')),
         'fecha_cotizacion_rechazada': _fmt_fecha_iso(orden.get('fecha_cotizacion_rechazada')),
         'total_diagnostico': _safe_float(orden.get('total_diagnostico'), 200.0),
-        
+
         # Jefes
         'jefe_operativo_nombre': jefe_operativo_nombre,
         'jefe_operativo_2_nombre': jefe_operativo_2_nombre,
         'jefe_taller_instrucciones_nombre': jefe_taller_instrucciones_nombre,
-        
+
         # Instrucciones directas en la orden
         'instrucciones_tecnico': orden.get('instrucciones_tecnico'),
         'fecha_instrucciones': _fmt_fecha_iso(orden.get('fecha_instrucciones')),
         'instrucciones_armado': orden.get('instrucciones_armado'),
         'fecha_inicio_armado': _fmt_fecha_iso(orden.get('fecha_inicio_armado')),
         'fecha_fin_armado': _fmt_fecha_iso(orden.get('fecha_fin_armado')),
-        
+
         # Vehículo
         'placa': vehiculo.get('placa', ''),
         'marca': vehiculo.get('marca', ''),
         'modelo': vehiculo.get('modelo', ''),
         'anio': vehiculo.get('anio'),
         'kilometraje': vehiculo.get('kilometraje'),
-        
+
         # Cliente
         'cliente': cliente,
-        
+
         # Recepción
         'descripcion_problema': recepcion_data.get('transcripcion_problema', ''),
         'audio_recepcion': recepcion_data.get('url_grabacion_problema'),
@@ -407,31 +468,31 @@ def _get_detalle_orden_full(id_orden):
             'obligatorias': fotos_obligatorias,
             'opcionales': fotos_opcionales
         },
-        
+
         # Diagnóstico
         'diagnostico_inicial': diagnostico_inicial,
         'diagnosticos_tecnicos': diagnosticos_tecnicos,
-        
+
         # Instrucciones
         'instrucciones': instrucciones,
-        
+
         # Técnicos
         'tecnicos_asignados': tecnicos_asignados,
-        
+
         # Planificación
         'planificacion': planificacion,
-        
+
         # Avances
         'avances': avances,
-        
+
         # Cotización
         'cotizacion': cotizacion,
         'servicios': servicios,
         'total_servicios': total_servicios,
-        
+
         # Timeline
         'seguimiento': seguimiento,
-        
+
         # Control de calidad
         'control_calidad': control_calidad
     }
@@ -449,12 +510,12 @@ def obtener_ultimas_ordenes(current_user):
         limite = request.args.get('limite', 10, type=int)
         if limite > 10:
             limite = 10
-        
-        ordenes_result = supabase.table('ordentrabajo')\
-            .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_salida, id_vehiculo, id_jefe_operativo')\
-            .order('fecha_ingreso', desc=True)\
+
+        ordenes_result = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_salida, id_vehiculo, id_jefe_operativo') \
+            .order('fecha_ingreso', desc=True) \
             .limit(limite).execute()
-        
+
         if not ordenes_result.data:
             return jsonify({
                 'success': True,
@@ -464,54 +525,63 @@ def obtener_ultimas_ordenes(current_user):
                     'en_pausa': 0, 'en_recepcion': 0
                 }
             }), 200
-        
+
         ordenes = ordenes_result.data
         cache = _NombreCache()
-        
-        # Vehículos en batch
+
+        # ---------- VEHÍCULOS EN BATCH ----------
         vehiculos_ids = list(set([o.get('id_vehiculo') for o in ordenes if o.get('id_vehiculo')]))
         vehiculos_map = {}
         if vehiculos_ids:
-            vehiculos = supabase.table('vehiculo')\
-                .select('id, placa, marca, modelo')\
+            vehiculos = supabase.table('vehiculo') \
+                .select('id, placa, marca, modelo, id_cliente') \
                 .in_('id', vehiculos_ids).execute()
             for v in (vehiculos.data or []):
                 vehiculos_map[v['id']] = v
-        
-        # Diagnósticos iniciales
+
+        # ---------- CLIENTES (nombre del usuario dueño/tercero) ----------
+        cliente_ids = list(set([v.get('id_cliente') for v in vehiculos_map.values() if v.get('id_cliente')]))
+        clientes_map = {}
+        if cliente_ids:
+            clientes = supabase.table('cliente') \
+                .select('id, id_usuario, nombre_tercero') \
+                .in_('id', cliente_ids).execute()
+            usuario_ids = list(set([c.get('id_usuario') for c in (clientes.data or []) if c.get('id_usuario')]))
+            usuarios_nombres = {}
+            if usuario_ids:
+                usuarios = supabase.table('usuario') \
+                    .select('id, nombre').in_('id', usuario_ids).execute()
+                for u in (usuarios.data or []):
+                    usuarios_nombres[u['id']] = u.get('nombre')
+            for c in (clientes.data or []):
+                nombre = usuarios_nombres.get(c.get('id_usuario')) or c.get('nombre_tercero') or 'Cliente'
+                clientes_map[c['id']] = nombre
+
+        # ---------- DIAGNÓSTICOS INICIALES ----------
         ordenes_ids = [o['id'] for o in ordenes]
         diagnosticos_map = {}
         if ordenes_ids:
-            diagnosticos = supabase.table('diagnostigoinicial')\
-                .select('id_orden_trabajo, diagnostigo')\
+            diagnosticos = supabase.table('diagnostigoinicial') \
+                .select('id_orden_trabajo, diagnostigo') \
                 .in_('id_orden_trabajo', ordenes_ids).execute()
             for d in (diagnosticos.data or []):
                 diagnosticos_map[d['id_orden_trabajo']] = (d.get('diagnostigo') or '')[:100]
-        
-        # Técnicos asignados
-        tecnicos_map = {}
-        if ordenes_ids:
-            asignaciones = supabase.table('asignaciontecnico')\
-                .select('id_orden_trabajo, id_tecnico')\
-                .in_('id_orden_trabajo', ordenes_ids).execute()
-            for a in (asignaciones.data or []):
-                oid = a['id_orden_trabajo']
-                tid = a['id_tecnico']
-                if oid not in tecnicos_map:
-                    tecnicos_map[oid] = []
-                nombre = cache.get(tid)
-                if nombre:
-                    tecnicos_map[oid].append({'nombre': nombre})
-        
-        # Construir respuesta
+
+        # ---------- TÉCNICOS (con helper robusto) ----------
+        tecnicos_map = _get_tecnicos_por_orden(ordenes_ids, cache)
+
+        # ---------- CONSTRUIR RESPUESTA ----------
         ordenes_resultado = []
         for orden in ordenes:
             v = vehiculos_map.get(orden.get('id_vehiculo'), {})
-            marca = v.get('marca', '')
-            modelo = v.get('modelo', '')
-            placa = v.get('placa', 'N/A')
+            marca = v.get('marca', '') or ''
+            modelo = v.get('modelo', '') or ''
+            placa = v.get('placa', 'N/A') or 'N/A'
             vehiculo_info = f"{marca} {modelo} ({placa})".strip() if (marca or modelo) else placa
-            
+
+            tecnicos_orden = tecnicos_map.get(orden['id'], [])
+            logger.info(f"🔧 Orden {orden['codigo_unico']} — técnicos: {tecnicos_orden}")
+
             ordenes_resultado.append({
                 'id': orden['id'],
                 'codigo_unico': orden['codigo_unico'],
@@ -522,11 +592,12 @@ def obtener_ultimas_ordenes(current_user):
                 'marca': marca,
                 'modelo': modelo,
                 'vehiculo_info': vehiculo_info,
+                'cliente_nombre': clientes_map.get(v.get('id_cliente'), 'Cliente no registrado'),
                 'jefe_operativo_nombre': cache.get(orden.get('id_jefe_operativo')),
-                'tecnicos': tecnicos_map.get(orden['id'], []),
+                'tecnicos': tecnicos_orden,
                 'diagnostico_inicial': diagnosticos_map.get(orden['id'])
             })
-        
+
         resumen = {
             'total': len(ordenes_resultado),
             'entregados': len([o for o in ordenes_resultado if o['estado_global'] in ['Entregado', 'Finalizado', 'ReparacionCompletada']]),
@@ -534,13 +605,13 @@ def obtener_ultimas_ordenes(current_user):
             'en_pausa': len([o for o in ordenes_resultado if o['estado_global'] == 'EnPausa']),
             'en_recepcion': len([o for o in ordenes_resultado if o['estado_global'] == 'EnRecepcion'])
         }
-        
+
         return jsonify({
             'success': True,
             'ordenes': ordenes_resultado,
             'resumen': resumen
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo últimas órdenes: {str(e)}")
         import traceback
@@ -561,44 +632,44 @@ def obtener_historial_vehiculo(current_user):
         fecha_desde = request.args.get('fecha_desde')
         fecha_hasta = request.args.get('fecha_hasta')
         estado = request.args.get('estado')
-        
+
         if not placa:
             return jsonify({'error': 'Placa requerida'}), 400
-        
-        # Buscar vehículo
-        vehiculo_result = supabase.table('vehiculo')\
-            .select('id, placa, marca, modelo, anio, kilometraje, id_cliente')\
+
+        # ---------- BUSCAR VEHÍCULO ----------
+        vehiculo_result = supabase.table('vehiculo') \
+            .select('id, placa, marca, modelo, anio, kilometraje, id_cliente') \
             .eq('placa', placa).execute()
-        
+
         if not vehiculo_result.data:
             return jsonify({
                 'success': True, 'vehiculo': None,
                 'ordenes': [], 'resumen': {}
             }), 200
-        
+
         vehiculo = vehiculo_result.data[0]
         cache = _NombreCache()
-        
-        # Cliente
+
+        # ---------- CLIENTE ----------
         cliente_nombre = 'No registrado'
         cliente_telefono = 'No registrado'
         if vehiculo.get('id_cliente'):
-            cliente_result = supabase.table('cliente')\
+            cliente_result = supabase.table('cliente') \
                 .select('id_usuario').eq('id', vehiculo['id_cliente']).execute()
             if cliente_result.data and cliente_result.data[0].get('id_usuario'):
                 id_usuario = cliente_result.data[0]['id_usuario']
-                usuario_result = supabase.table('usuario')\
+                usuario_result = supabase.table('usuario') \
                     .select('nombre, contacto').eq('id', id_usuario).execute()
                 if usuario_result.data:
                     cliente_nombre = usuario_result.data[0].get('nombre', 'No registrado')
                     cliente_telefono = usuario_result.data[0].get('contacto', 'No registrado')
-        
-        # Órdenes del vehículo
-        ordenes_result = supabase.table('ordentrabajo')\
-            .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_salida, id_jefe_operativo')\
-            .eq('id_vehiculo', vehiculo['id'])\
+
+        # ---------- ÓRDENES DEL VEHÍCULO ----------
+        ordenes_result = supabase.table('ordentrabajo') \
+            .select('id, codigo_unico, estado_global, fecha_ingreso, fecha_salida, id_jefe_operativo') \
+            .eq('id_vehiculo', vehiculo['id']) \
             .order('fecha_ingreso', desc=True).execute()
-        
+
         if not ordenes_result.data:
             return jsonify({
                 'success': True,
@@ -614,35 +685,23 @@ def obtener_historial_vehiculo(current_user):
                 },
                 'ordenes': [], 'resumen': {}
             }), 200
-        
+
         ordenes = ordenes_result.data
         ordenes_ids = [o['id'] for o in ordenes]
-        
-        # Diagnósticos
+
+        # ---------- DIAGNÓSTICOS ----------
         diagnosticos_map = {}
         if ordenes_ids:
-            diagnosticos = supabase.table('diagnostigoinicial')\
-                .select('id_orden_trabajo, diagnostigo')\
+            diagnosticos = supabase.table('diagnostigoinicial') \
+                .select('id_orden_trabajo, diagnostigo') \
                 .in_('id_orden_trabajo', ordenes_ids).execute()
             for d in (diagnosticos.data or []):
                 diagnosticos_map[d['id_orden_trabajo']] = d.get('diagnostigo')
-        
-        # Técnicos
-        tecnicos_map = {}
-        if ordenes_ids:
-            asignaciones = supabase.table('asignaciontecnico')\
-                .select('id_orden_trabajo, id_tecnico')\
-                .in_('id_orden_trabajo', ordenes_ids).execute()
-            for a in (asignaciones.data or []):
-                oid = a['id_orden_trabajo']
-                tid = a['id_tecnico']
-                if oid not in tecnicos_map:
-                    tecnicos_map[oid] = []
-                nombre = cache.get(tid)
-                if nombre:
-                    tecnicos_map[oid].append({'nombre': nombre})
-        
-        # Construir resultado con filtros
+
+        # ---------- TÉCNICOS (helper robusto) ----------
+        tecnicos_map = _get_tecnicos_por_orden(ordenes_ids, cache)
+
+        # ---------- CONSTRUIR RESULTADO CON FILTROS ----------
         ordenes_resultado = []
         for orden in ordenes:
             item = {
@@ -655,27 +714,29 @@ def obtener_historial_vehiculo(current_user):
                 'tecnicos': tecnicos_map.get(orden['id'], []),
                 'diagnostico_inicial': diagnosticos_map.get(orden['id'])
             }
-            
+
             # Filtros
             if fecha_desde:
                 try:
                     fd = datetime.datetime.fromisoformat(fecha_desde).date()
                     fi = datetime.datetime.fromisoformat(item['fecha_ingreso']).date()
-                    if fi < fd: continue
+                    if fi < fd:
+                        continue
                 except Exception:
                     pass
             if fecha_hasta:
                 try:
                     fh = datetime.datetime.fromisoformat(fecha_hasta).date()
                     fi = datetime.datetime.fromisoformat(item['fecha_ingreso']).date()
-                    if fi > fh: continue
+                    if fi > fh:
+                        continue
                 except Exception:
                     pass
             if estado and item['estado_global'] != estado:
                 continue
-            
+
             ordenes_resultado.append(item)
-        
+
         resumen = {
             'total': len(ordenes_resultado),
             'entregados': len([o for o in ordenes_resultado if o['estado_global'] in ['Entregado', 'Finalizado', 'ReparacionCompletada']]),
@@ -683,7 +744,7 @@ def obtener_historial_vehiculo(current_user):
             'en_pausa': len([o for o in ordenes_resultado if o['estado_global'] == 'EnPausa']),
             'en_recepcion': len([o for o in ordenes_resultado if o['estado_global'] == 'EnRecepcion'])
         }
-        
+
         return jsonify({
             'success': True,
             'vehiculo': {
@@ -699,7 +760,7 @@ def obtener_historial_vehiculo(current_user):
             'ordenes': ordenes_resultado,
             'resumen': resumen
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error en historial de vehículo: {str(e)}")
         import traceback

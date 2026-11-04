@@ -1,6 +1,7 @@
 /* =====================================================
    HISTORIAL DE VEHÍCULOS - JEFE TALLER
    CSS COMPLETO - Cards, filtros, modal 5 tabs, PDF
+   CORREGIDO: btn-volver, botones en empty-state, etc.
    ===================================================== */
 
 /* =====================================================
@@ -224,9 +225,12 @@ body.sidebar-open { overflow: hidden; }
     color: var(--blanco);
 }
 
-/* Botones de búsqueda */
+/* =====================================================
+   BOTONES DE BÚSQUEDA
+   ===================================================== */
 .btn-buscar,
-.btn-limpiar {
+.btn-limpiar,
+.btn-volver {
     padding: 0.7rem 1.5rem;
     border-radius: var(--radius-md);
     font-weight: 600;
@@ -240,11 +244,11 @@ body.sidebar-open { overflow: hidden; }
     min-height: 44px;
     font-family: inherit;
     white-space: nowrap;
+    border: none;
 }
 
 .btn-buscar {
     background: linear-gradient(135deg, var(--rojo-primario), var(--rojo-oscuro));
-    border: none;
     color: white;
     box-shadow: 0 2px 8px rgba(193,18,31,0.3);
 }
@@ -252,6 +256,10 @@ body.sidebar-open { overflow: hidden; }
 .btn-buscar:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(193,18,31,0.4);
+}
+
+.btn-buscar:active {
+    transform: translateY(0);
 }
 
 .btn-limpiar {
@@ -263,6 +271,46 @@ body.sidebar-open { overflow: hidden; }
 .btn-limpiar:hover {
     background: rgba(245,158,11,0.25);
     transform: translateY(-1px);
+}
+
+.btn-volver {
+    background: var(--gris-oscuro);
+    border: 1px solid var(--border-color);
+    color: var(--blanco);
+}
+
+.btn-volver:hover {
+    background: var(--gris-medio);
+    border-color: var(--rojo-primario);
+    color: var(--rojo-primario);
+    transform: translateX(-2px);
+}
+
+.btn-volver i {
+    font-size: 0.85rem;
+}
+
+/* Wrapper del botón volver */
+.historial-back-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+/* =====================================================
+   BOTONES DENTRO DE EMPTY / LOADING STATES
+   ===================================================== */
+.empty-state .btn-buscar,
+.empty-state .btn-limpiar,
+.empty-state .btn-volver,
+.loading-state .btn-buscar,
+.loading-state .btn-limpiar,
+.loading-state .btn-volver {
+    margin: 1rem auto 0 auto;
+    display: inline-flex;
+    width: auto;
+    min-width: 180px;
+    justify-content: center;
 }
 
 /* =====================================================
@@ -335,7 +383,7 @@ body.sidebar-open { overflow: hidden; }
 }
 
 /* =====================================================
-   VEHÍCULO INFO CARD (búsqueda por placa)
+   VEHÍCULO INFO CARD
    ===================================================== */
 .vehiculo-info-card {
     background: var(--bg-card);
@@ -682,14 +730,11 @@ body.sidebar-open { overflow: hidden; }
 }
 
 .modal-body::-webkit-scrollbar { width: 6px; }
-
 .modal-body::-webkit-scrollbar-track { background: transparent; }
-
 .modal-body::-webkit-scrollbar-thumb {
     background: var(--gris-medio);
     border-radius: var(--radius-sm);
 }
-
 .modal-body::-webkit-scrollbar-thumb:hover { background: var(--rojo-primario); }
 
 .modal-footer {
@@ -768,10 +813,7 @@ body.sidebar-open { overflow: hidden; }
     scrollbar-width: thin;
 }
 
-.modal-tabs::-webkit-scrollbar {
-    height: 4px;
-}
-
+.modal-tabs::-webkit-scrollbar { height: 4px; }
 .modal-tabs::-webkit-scrollbar-thumb {
     background: var(--gris-medio);
     border-radius: var(--radius-sm);
@@ -1043,7 +1085,6 @@ body.sidebar-open { overflow: hidden; }
 }
 
 .audio-player strong {
-    display: block;
     font-size: 0.8rem;
     color: var(--gris-texto);
     margin-bottom: 0.5rem;
@@ -1060,6 +1101,7 @@ body.sidebar-open { overflow: hidden; }
     height: 40px;
     border-radius: var(--radius-sm);
     background: var(--bg-card);
+    display: block;
 }
 
 /* =====================================================
@@ -1163,7 +1205,7 @@ body.sidebar-open { overflow: hidden; }
 }
 
 /* =====================================================
-   MODAL IMAGEN AMPLIADA
+   MODAL IMAGEN AMPLIADA (creado por JS)
    ===================================================== */
 .modal-imagen {
     position: fixed;
@@ -1176,6 +1218,48 @@ body.sidebar-open { overflow: hidden; }
     justify-content: center;
     padding: 20px;
     animation: fadeInUp 0.2s ease;
+    cursor: pointer;
+}
+
+.modal-imagen > div {
+    position: relative;
+    max-width: 90%;
+    max-height: 90%;
+}
+
+.modal-imagen button {
+    position: absolute;
+    top: -40px;
+    right: 0;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 30px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    transition: var(--transition);
+}
+
+.modal-imagen button:hover {
+    color: var(--rojo-primario);
+    transform: rotate(90deg);
+}
+
+.modal-imagen img {
+    max-width: 100%;
+    max-height: 80vh;
+    border-radius: var(--radius-md);
+    display: block;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+}
+
+.modal-imagen p {
+    color: white;
+    text-align: center;
+    margin-top: 12px;
+    font-size: 14px;
+    font-weight: 500;
 }
 
 /* =====================================================
@@ -1202,26 +1286,21 @@ body.sidebar-open { overflow: hidden; }
     line-height: 1.4;
 }
 
-.toast-notification i { font-size: 1.15rem; flex-shrink: 0; }
-
-.toast-notification.success {
-    border-left-color: var(--verde-exito);
+.toast-notification i {
+    font-size: 1.15rem;
+    flex-shrink: 0;
 }
+
+.toast-notification.success { border-left-color: var(--verde-exito); }
 .toast-notification.success i { color: var(--verde-exito); }
 
-.toast-notification.error {
-    border-left-color: var(--rojo-primario);
-}
+.toast-notification.error { border-left-color: var(--rojo-primario); }
 .toast-notification.error i { color: var(--rojo-primario); }
 
-.toast-notification.warning {
-    border-left-color: var(--ambar-alerta);
-}
+.toast-notification.warning { border-left-color: var(--ambar-alerta); }
 .toast-notification.warning i { color: var(--ambar-alerta); }
 
-.toast-notification.info {
-    border-left-color: var(--azul-acento);
-}
+.toast-notification.info { border-left-color: var(--azul-acento); }
 .toast-notification.info i { color: var(--azul-acento); }
 
 /* =====================================================
@@ -1612,6 +1691,7 @@ body.sidebar-open { overflow: hidden; }
     .orden-card-footer,
     .btn-buscar,
     .btn-limpiar,
+    .btn-volver,
     .btn-accion,
     .btn-pdf,
     .toast-notification {
